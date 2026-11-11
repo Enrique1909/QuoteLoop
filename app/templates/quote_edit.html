@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros.html" import input, btn %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block body %}
+<a href="/requests/{{ r.id }}" class="text-sm text-slate-500 hover:underline">← {{ r.title }}</a>
+<h1 class="mt-2 text-2xl font-bold">Check quote: {{ supplier.name }}</h1>
+<p class="text-sm text-slate-500">Compare with the original quote. Saving marks it verified and recalculates the total.</p>
+<form method="post" action="/quotes/{{ q.id }}/edit" class="mt-6 bg-white rounded-xl ring-1 ring-slate-200 p-6 grid sm:grid-cols-3 gap-4 max-w-3xl text-sm">
+ <label class="block font-medium">Base (₹)<input name="base_inr" type="number" step="0.01" value="{{ q.base_paise / 100 }}" class="mt-1 {{ input() }}"></label>
+ <label class="block font-medium">Delivery (₹)<input name="delivery_inr" type="number" step="0.01" value="{{ q.delivery_paise / 100 }}" class="mt-1 {{ input() }}"></label>
+ <label class="block font-medium">Tax (₹)<input name="tax_inr" type="number" step="0.01" value="{{ q.tax_paise / 100 }}" class="mt-1 {{ input() }}"></label>
+ <label class="block font-medium">Quantity<input name="quantity" type="number" value="{{ q.quantity }}" class="mt-1 {{ input() }}"></label>
+ <label class="block font-medium">Unit<input name="unit" value="{{ q.unit }}" class="mt-1 {{ input() }}"></label>
+ <label class="block font-medium">Lead time (days)<input name="lead_time_days" type="number" value="{{ q.lead_time_days if q.lead_time_days is not none else '' }}" class="mt-1 {{ input() }}"></label>
+ <label class="sm:col-span-3 block font-medium">Payment terms<input name="payment_terms" value="{{ q.payment_terms }}" class="mt-1 {{ input() }}"></label>
+ <label class="sm:col-span-3 block font-medium">Includes<textarea name="scope" rows="2" class="mt-1 {{ input() }}">{{ q.scope }}</textarea></label>
+ <label class="sm:col-span-3 block font-medium">Excludes<textarea name="exclusions" rows="2" class="mt-1 {{ input() }}">{{ q.exclusions }}</textarea></label>
+ <button class="justify-self-start {{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Save &amp; verify</button>
+</form>
+{% endblock %}

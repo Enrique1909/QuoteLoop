@@ -1,0 +1,4 @@
+{% macro badge(key) %}{% set s = status(key) %}<span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {{ s[1] }}">{{ s[0] }}</span>{% endmacro %}
+{% macro pill(text, cls="bg-slate-100 text-slate-600") %}<span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium {{ cls }}">{{ text }}</span>{% endmacro %}
+{% macro btn(cls="") %}inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-semibold transition {{ cls }}{% endmacro %}
+{% macro input() %}w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100{% endmacro %}

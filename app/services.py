@@ -1,139 +1,266 @@
-"""Business logic shared by the web app and the MCP server. No AI anywhere in here."""
-from datetime import timezone
+"""QuoteLoop business logic, shared by the web app and the MCP server. No AI runs here."""
+from datetime import date, timezone
 from typing import Optional
 
 from sqlmodel import Session, select
 
-from app.models import Agreement, AgreementVersion, ChangeRequest, now, snapshot
-from app.money import approved_total, final_deadline, format_inr
+from app.models import (Engagement, Negotiation, NegotiationDraft, Offer, Quotation, SourcingRequest, Supplier,
+                        now)
+from app.money import format_inr, pct
 
 
 class NotFound(Exception):
     pass
 
 
-def clean_list(items) -> list[str]:
-    return [str(i).strip() for i in (items or []) if str(i).strip()]
+class InvalidState(Exception):
+    pass
 
 
-def clean_milestones(items) -> list[dict]:
-    out = []
-    for m in items or []:
-        if isinstance(m, dict):
-            name = str(m.get("name", "")).strip()
-            due = str(m.get("due_date", "")).strip()
-        else:
-            name, due = str(m).strip(), ""
-        if name:
-            out.append({"name": name, "due_date": due})
-    return out
+# ---------- suppliers & requests ----------
+def find_supplier(s: Session, wid: int, name: str) -> Optional[Supplier]:
+    name = (name or "").strip().lower()
+    for sup in s.exec(select(Supplier).where(Supplier.workspace_id == wid)):
+        if sup.name.strip().lower() == name:
+            return sup
+    return None
 
 
-def get_agreement(s: Session, workspace_id: int, agreement_id: int) -> Agreement:
-    a = s.get(Agreement, agreement_id)
-    if not a or a.workspace_id != workspace_id:
-        raise NotFound(f"Agreement {agreement_id} not found in this workspace")
-    return a
-
-
-def change_requests(s: Session, agreement_id: int) -> list[ChangeRequest]:
-    return list(s.exec(select(ChangeRequest).where(ChangeRequest.agreement_id == agreement_id).order_by(ChangeRequest.id)))
-
-
-def versions(s: Session, agreement_id: int) -> list[AgreementVersion]:
-    return list(s.exec(select(AgreementVersion).where(AgreementVersion.agreement_id == agreement_id).order_by(AgreementVersion.version_no)))
-
-
-def latest_version(s: Session, agreement_id: int) -> Optional[AgreementVersion]:
-    vs = versions(s, agreement_id)
-    return vs[-1] if vs else None
-
-
-def create_agreement(s: Session, workspace_id: int, *, client_name, project_title, price_paise,
-                     summary="", client_email="", deliverables=None, exclusions=None, milestones=None,
-                     revision_limit=2, created_via="app", is_sample=False) -> Agreement:
-    a = Agreement(
-        workspace_id=workspace_id, client_name=client_name.strip(), client_email=(client_email or "").strip(),
-        project_title=project_title.strip(), summary=(summary or "").strip(),
-        deliverables=clean_list(deliverables), exclusions=clean_list(exclusions),
-        milestones=clean_milestones(milestones), revision_limit=int(revision_limit),
-        base_price_paise=int(price_paise), created_via=created_via, is_sample=is_sample,
-    )
-    s.add(a)
+def get_or_create_supplier(s: Session, wid: int, name: str, contact: str = "", category: str = "") -> Supplier:
+    sup = find_supplier(s, wid, name)
+    if sup:
+        return sup
+    sup = Supplier(workspace_id=wid, name=name.strip(), contact=contact or "", category=category or "")
+    s.add(sup)
     s.commit()
-    s.refresh(a)
-    return a
+    s.refresh(sup)
+    return sup
 
 
-def update_agreement(s: Session, a: Agreement, **fields) -> Agreement:
-    for k, v in fields.items():
-        if k in ("deliverables", "exclusions"):
-            v = clean_list(v)
-        elif k == "milestones":
-            v = clean_milestones(v)
-        setattr(a, k, v)
-    # Any edit after sending means the client must review a new version.
-    a.status = "draft"
-    a.updated_at = now()
-    s.add(a)
+def get_request(s: Session, wid: int, rid: int) -> SourcingRequest:
+    r = s.get(SourcingRequest, rid)
+    if not r or r.workspace_id != wid:
+        raise NotFound(f"Sourcing request {rid} not found in this workspace")
+    return r
+
+
+def get_supplier(s: Session, wid: int, sid: int) -> Supplier:
+    sup = s.get(Supplier, sid)
+    if not sup or sup.workspace_id != wid:
+        raise NotFound(f"Supplier {sid} not found in this workspace")
+    return sup
+
+
+def quotations(s: Session, rid: int) -> list[Quotation]:
+    return list(s.exec(select(Quotation).where(Quotation.request_id == rid).order_by(Quotation.id)))
+
+
+def quote_for(s: Session, rid: int, sid: int) -> Optional[Quotation]:
+    return s.exec(select(Quotation).where(Quotation.request_id == rid, Quotation.supplier_id == sid)
+                  .order_by(Quotation.id)).first()
+
+
+# ---------- comparison (deterministic) ----------
+def quote_flags(req: SourcingRequest, q: Quotation) -> list[str]:
+    flags = []
+    if q.quantity != req.quantity or (q.unit or "").strip().lower() != (req.unit or "").strip().lower():
+        flags.append(f"Quoted {q.quantity} {q.unit} vs requested {req.quantity} {req.unit}: not directly comparable")
+    if q.lead_time_days is None:
+        flags.append("Lead time missing")
+    if not (q.payment_terms or "").strip():
+        flags.append("Payment terms missing")
+    if q.tax_paise == 0:
+        flags.append("Tax not stated (total may exclude GST)")
+    return flags
+
+
+def history_summary(s: Session, wid: int, sid: int, category: str = "") -> dict:
+    rows = list(s.exec(select(Engagement).where(Engagement.workspace_id == wid, Engagement.supplier_id == sid)
+                       .order_by(Engagement.date.desc())))
+    recorded = [e for e in rows if e.on_time is not None]
+    rated = [e.rating for e in rows if e.rating]
+    discounts = [pct(e.quoted_paise - e.agreed_paise, e.quoted_paise) for e in rows if e.quoted_paise]
+    return {
+        "engagements": len(rows),
+        "on_time_rate": pct(sum(1 for e in recorded if e.on_time), len(recorded)) if recorded else None,
+        "late_count": sum(1 for e in recorded if e.on_time is False),
+        "avg_rating": round(sum(rated) / len(rated), 1) if rated else None,
+        "avg_discount_pct": round(sum(float(d) for d in discounts) / len(discounts), 1) if discounts else None,
+        "issues": [e.notes for e in rows if e.notes and (e.on_time is False or e.price_honored is False
+                                                          or e.scope_honored is False)],
+        "rows": rows,
+    }
+
+
+def comparison(s: Session, req: SourcingRequest) -> list[dict]:
+    rows = []
+    for q in quotations(s, req.id):
+        sup = s.get(Supplier, q.supplier_id)
+        flags = quote_flags(req, q)
+        comparable = not any("not directly comparable" in f for f in flags)
+        rows.append({"q": q, "supplier": sup, "total": q.total_paise, "flags": flags, "comparable": comparable,
+                     "unit_price": q.total_paise // q.quantity if q.quantity else None,
+                     "history": history_summary(s, req.workspace_id, sup.id),
+                     "negotiation": s.exec(select(Negotiation).where(Negotiation.request_id == req.id,
+                                                                     Negotiation.supplier_id == sup.id)).first()})
+    comparable = [r for r in rows if r["comparable"]]
+    if comparable:
+        low = min(r["total"] for r in comparable)
+        for r in comparable:
+            r["cheapest"] = r["total"] == low
+            r["gap_pct"] = pct(r["total"] - low, low) if low else None
+        lead = [r for r in comparable if r["q"].lead_time_days is not None]
+        if lead:
+            fast = min(r["q"].lead_time_days for r in lead)
+            for r in lead:
+                r["fastest"] = r["q"].lead_time_days == fast
+    return rows
+
+
+# ---------- negotiation state machine ----------
+def get_negotiation(s: Session, wid: int, nid: int) -> Negotiation:
+    n = s.get(Negotiation, nid)
+    if not n:
+        raise NotFound(f"Negotiation {nid} not found")
+    get_request(s, wid, n.request_id)  # ownership check
+    return n
+
+
+def get_or_create_negotiation(s: Session, req: SourcingRequest, sid: int) -> Negotiation:
+    n = s.exec(select(Negotiation).where(Negotiation.request_id == req.id, Negotiation.supplier_id == sid)).first()
+    if n:
+        return n
+    if not quote_for(s, req.id, sid):
+        raise InvalidState("This supplier has no quotation on this request.")
+    n = Negotiation(request_id=req.id, supplier_id=sid)
+    s.add(n)
     s.commit()
-    s.refresh(a)
-    return a
+    s.refresh(n)
+    return n
 
 
-def send_agreement(s: Session, a: Agreement) -> AgreementVersion:
-    prev = latest_version(s, a.id)
-    v = AgreementVersion(agreement_id=a.id, version_no=(prev.version_no + 1) if prev else 1,
-                         snapshot=snapshot(a), status="sent")
-    a.status = "sent"
-    a.updated_at = now()
-    s.add(v)
-    s.add(a)
+def timeline(s: Session, nid: int) -> list[Offer]:
+    return list(s.exec(select(Offer).where(Offer.negotiation_id == nid).order_by(Offer.id)))
+
+
+def latest_offer(s: Session, nid: int, author: Optional[str] = None) -> Optional[Offer]:
+    offers = [o for o in timeline(s, nid) if o.kind == "offer" and (author is None or o.author == author)]
+    return offers[-1] if offers else None
+
+
+def latest_draft(s: Session, nid: int) -> Optional[NegotiationDraft]:
+    return s.exec(select(NegotiationDraft).where(NegotiationDraft.negotiation_id == nid)
+                  .order_by(NegotiationDraft.id.desc())).first()
+
+
+def _touch(s, n, status, req=None):
+    n.status = status
+    n.updated_at = now()
+    s.add(n)
+    if req is not None:
+        s.add(req)
     s.commit()
-    s.refresh(v)
-    return v
 
 
-def client_respond(s: Session, a: Agreement, *, approve: bool, name: str, comment: str = "") -> AgreementVersion:
-    v = latest_version(s, a.id)
-    if not v or a.status not in ("sent",):
-        raise ValueError("There is no version waiting for your review.")
-    v.status = "approved" if approve else "revision_requested"
-    v.responded_by_name = name.strip()
-    v.responded_at = now()
-    v.client_comment = (comment or "").strip()
-    a.status = v.status
-    a.updated_at = now()
-    s.add(v)
-    s.add(a)
+def buyer_send_offer(s: Session, n: Negotiation, *, price_paise: int, delivery: str, terms: str, message: str) -> Offer:
+    req = s.get(SourcingRequest, n.request_id)
+    if req.status == "agreed" or n.status not in ("draft", "awaiting_buyer"):
+        raise InvalidState("You can only send an offer when it's your turn and the request isn't agreed yet.")
+    if price_paise <= 0:
+        raise InvalidState("Offer price must be more than zero.")
+    o = Offer(negotiation_id=n.id, author="buyer", price_paise=price_paise, delivery_commitment=delivery.strip(),
+              terms=terms.strip(), message=message.strip(), author_name="Buyer")
+    s.add(o)
+    req.status = "negotiating"
+    _touch(s, n, "awaiting_supplier", req)
+    return o
+
+
+def _finalize(s: Session, n: Negotiation, price_paise: int):
+    req = s.get(SourcingRequest, n.request_id)
+    if req.status == "agreed":
+        raise InvalidState("This request already has an agreed supplier.")
+    req.status = "agreed"
+    req.agreed_supplier_id = n.supplier_id
+    req.agreed_price_paise = price_paise
+    req.agreed_at = now()
+    n.token_revoked = False
+    _touch(s, n, "agreed", req)
+    for other in s.exec(select(Negotiation).where(Negotiation.request_id == req.id, Negotiation.id != n.id)):
+        if other.status not in ("agreed", "rejected"):
+            other.status = "closed"
+        other.token_revoked = True
+        s.add(other)
+    q = quote_for(s, req.id, n.supplier_id)
+    s.add(Engagement(workspace_id=req.workspace_id, supplier_id=n.supplier_id, request_id=req.id,
+                     date=date.today().isoformat(), item=req.title, specifications=req.specifications,
+                     quantity=req.quantity, unit=req.unit, quoted_paise=q.total_paise if q else price_paise,
+                     agreed_paise=price_paise))
     s.commit()
-    return v
 
 
-def create_change_request(s: Session, a: Agreement, *, description, extra_price_paise, extra_days, created_via="app") -> ChangeRequest:
-    if a.status != "approved":
-        raise ValueError("Change requests can only be raised on an approved agreement.")
-    cr = ChangeRequest(agreement_id=a.id, description=description.strip(), extra_price_paise=int(extra_price_paise),
-                       extra_days=int(extra_days), created_via=created_via)
-    s.add(cr)
+def supplier_respond(s: Session, n: Negotiation, *, action: str, name: str, price_paise: int = 0,
+                     delivery: str = "", message: str = "") -> None:
+    if n.token_revoked or n.status != "awaiting_supplier":
+        raise InvalidState("There is no offer waiting for your response.")
+    buyer_offer = latest_offer(s, n.id, "buyer")
+    name = (name or "").strip() or "Supplier"
+    if action == "accept":
+        s.add(Offer(negotiation_id=n.id, author="supplier", kind="accept", price_paise=buyer_offer.price_paise,
+                    message=message.strip(), author_name=name))
+        _finalize(s, n, buyer_offer.price_paise)
+    elif action == "reject":
+        s.add(Offer(negotiation_id=n.id, author="supplier", kind="reject", message=message.strip(), author_name=name))
+        _touch(s, n, "rejected")
+    elif action == "counter":
+        if price_paise <= 0:
+            raise InvalidState("Enter your counteroffer price.")
+        s.add(Offer(negotiation_id=n.id, author="supplier", price_paise=price_paise,
+                    delivery_commitment=delivery.strip(), message=message.strip(), author_name=name))
+        _touch(s, n, "awaiting_buyer")
+    else:
+        raise InvalidState("Unknown action.")
+
+
+def buyer_accept(s: Session, n: Negotiation) -> None:
+    if n.status != "awaiting_buyer":
+        raise InvalidState("There is no supplier offer to accept.")
+    sup_offer = latest_offer(s, n.id, "supplier")
+    s.add(Offer(negotiation_id=n.id, author="buyer", kind="accept", price_paise=sup_offer.price_paise,
+                author_name="Buyer"))
+    _finalize(s, n, sup_offer.price_paise)
+
+
+def buyer_reject(s: Session, n: Negotiation) -> None:
+    if n.status in ("agreed", "rejected"):
+        raise InvalidState("This negotiation is already finished.")
+    s.add(Offer(negotiation_id=n.id, author="buyer", kind="reject", author_name="Buyer"))
+    n.token_revoked = True
+    _touch(s, n, "rejected")
+
+
+def save_draft(s: Session, n: Negotiation, *, price_paise, delivery, terms, message, reasoning, references):
+    d = NegotiationDraft(negotiation_id=n.id, price_paise=price_paise, delivery_commitment=delivery or "",
+                         terms=terms or "", message=message or "", reasoning=reasoning or "",
+                         references=list(references or []))
+    s.add(d)
     s.commit()
-    s.refresh(cr)
-    return cr
+    s.refresh(d)
+    return d
 
 
-def respond_change_request(s: Session, a: Agreement, cr_id: int, *, approve: bool, name: str) -> ChangeRequest:
-    cr = s.get(ChangeRequest, cr_id)
-    if not cr or cr.agreement_id != a.id or cr.status != "pending":
-        raise ValueError("This change request is not awaiting a response.")
-    cr.status = "approved" if approve else "declined"
-    cr.responded_by_name = name.strip()
-    cr.responded_at = now()
-    s.add(cr)
+def record_outcome(s: Session, wid: int, eid: int, *, on_time, price_honored, scope_honored, rating, notes):
+    e = s.get(Engagement, eid)
+    if not e or e.workspace_id != wid:
+        raise NotFound("Engagement not found")
+    e.on_time, e.price_honored, e.scope_honored = on_time, price_honored, scope_honored
+    e.rating, e.notes = rating, notes.strip()
+    s.add(e)
     s.commit()
-    return cr
 
 
-def iso(dt) -> Optional[str]:
+# ---------- read models for MCP ----------
+def iso(dt):
     if not dt:
         return None
     if dt.tzinfo is None:
@@ -141,42 +268,35 @@ def iso(dt) -> Optional[str]:
     return dt.isoformat()
 
 
-def summary(s: Session, a: Agreement) -> dict:
-    crs = change_requests(s, a.id)
-    deadline = final_deadline(a, crs)
-    return {
-        "id": a.id,
-        "client": a.client_name,
-        "project": a.project_title,
-        "status": a.status,
-        "base_price": format_inr(a.base_price_paise),
-        "approved_total": format_inr(approved_total(a, crs)),
-        "pending_change_requests": sum(1 for c in crs if c.status == "pending"),
-        "final_deadline": deadline.isoformat() if deadline else None,
-        "sample_data": a.is_sample,
-    }
+def engagement_dict(e: Engagement) -> dict:
+    return {"date": e.date, "item": e.item, "specifications": e.specifications, "quantity": e.quantity,
+            "unit": e.unit, "quoted": format_inr(e.quoted_paise), "agreed": format_inr(e.agreed_paise),
+            "agreed_unit_price": format_inr(e.agreed_paise // e.quantity) if e.quantity else None,
+            "discount_from_quote_pct": float(pct(e.quoted_paise - e.agreed_paise, e.quoted_paise) or 0),
+            "on_time": e.on_time, "price_honored": e.price_honored, "scope_honored": e.scope_honored,
+            "rating": e.rating, "notes": e.notes or None}
 
 
-def detail(s: Session, a: Agreement) -> dict:
-    crs = change_requests(s, a.id)
-    d = summary(s, a)
-    d.update({
-        "client_email": a.client_email,
-        "summary": a.summary,
-        "deliverables": a.deliverables,
-        "exclusions": a.exclusions,
-        "milestones": a.milestones,
-        "revision_limit": a.revision_limit,
-        "versions": [
-            {"version": v.version_no, "status": v.status, "sent_at": iso(v.sent_at),
-             "responded_by": v.responded_by_name or None, "responded_at": iso(v.responded_at),
-             "client_comment": v.client_comment or None}
-            for v in versions(s, a.id)
-        ],
-        "change_requests": [
-            {"id": c.id, "description": c.description, "extra_price": format_inr(c.extra_price_paise),
-             "extra_days": c.extra_days, "status": c.status, "responded_by": c.responded_by_name or None}
-            for c in crs
-        ],
-    })
-    return d
+def quote_dict(req, q: Quotation, sup: Supplier) -> dict:
+    return {"supplier_id": sup.id, "supplier": sup.name, "base": format_inr(q.base_paise),
+            "delivery": format_inr(q.delivery_paise), "tax": format_inr(q.tax_paise), "total": format_inr(q.total_paise),
+            "quantity": q.quantity, "unit": q.unit, "lead_time_days": q.lead_time_days,
+            "payment_terms": q.payment_terms, "scope": q.scope, "exclusions": q.exclusions,
+            "verified_by_buyer": q.verified, "flags": quote_flags(req, q)}
+
+
+def request_dict(s: Session, req: SourcingRequest) -> dict:
+    rows = comparison(s, req)
+    return {"request_id": req.id, "title": req.title, "category": req.category, "status": req.status,
+            "specifications": req.specifications, "quantity": req.quantity, "unit": req.unit, "needed_by": req.needed_by,
+            "quotations": [quote_dict(req, r["q"], r["supplier"]) | {"cheapest_comparable": r.get("cheapest", False),
+                                                                    "gap_vs_cheapest_pct": float(r["gap_pct"]) if r.get("gap_pct") is not None else None}
+                           for r in rows],
+            "agreed_supplier_id": req.agreed_supplier_id,
+            "agreed_price": format_inr(req.agreed_price_paise) if req.agreed_price_paise else None}
+
+
+def offer_dict(o: Offer) -> dict:
+    return {"author": o.author, "type": o.kind, "price": format_inr(o.price_paise) if o.price_paise else None,
+            "delivery_commitment": o.delivery_commitment or None, "terms": o.terms or None,
+            "message": o.message or None, "at": iso(o.created_at)}

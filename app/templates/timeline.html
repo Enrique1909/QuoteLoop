@@ -1,0 +1,12 @@
+<ol class="relative border-l border-slate-200 ml-2 space-y-5">
+{% for o in offers %}
+ <li class="ml-5">
+  <span class="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full ring-4 ring-white {{ 'bg-brand-600' if o.author == 'buyer' else 'bg-amber-500' }}{% if o.kind == 'accept' %} !bg-emerald-500{% endif %}{% if o.kind == 'reject' %} !bg-rose-500{% endif %}"></span>
+  <p class="text-sm"><strong>{{ buyer_label if o.author == 'buyer' else (o.author_name or supplier_label) }}</strong>
+   {% if o.kind == 'accept' %} accepted <span class="font-semibold num">{{ inr(o.price_paise) }}</span>{% elif o.kind == 'reject' %} rejected the offer{% else %} offered <span class="font-semibold num">{{ inr(o.price_paise) }}</span>{% endif %}</p>
+  {% if o.delivery_commitment or o.terms %}<p class="text-xs text-slate-500">{{ o.delivery_commitment }}{% if o.delivery_commitment and o.terms %} · {% endif %}{{ o.terms }}</p>{% endif %}
+  {% if o.message %}<p class="mt-1 text-sm text-slate-700 bg-slate-50 rounded-lg px-3 py-2">“{{ o.message }}”</p>{% endif %}
+  <p class="text-[11px] text-slate-400 mt-0.5">{{ o.created_at.strftime('%d %b %Y, %H:%M') }} UTC</p>
+ </li>
+{% else %}<li class="ml-5 text-sm text-slate-500">No offers yet.</li>{% endfor %}
+</ol>

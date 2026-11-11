@@ -1,10 +1,9 @@
 {% extends "base.html" %}
 {% block body %}
-<section style="padding-top:3rem">
-<h1>ClientRoom</h1>
-<p style="font-size:1.2rem">From project brief to client approval — and every change after it — without the back-and-forth.</p>
-<p>Agencies describe a project to their own Claude. ClientRoom turns it into an agreement the client can review and approve from a link, then tracks change requests and the approved total.</p>
-<a href="/login" role="button">Agency login</a>
-<p class="muted" style="margin-top:1rem">Demo account: {{ demo_email }} (password shared with reviewers).</p>
+<section class="py-16 max-w-2xl">
+ <div class="flex items-center gap-2 font-bold text-slate-900 mb-8"><span class="grid place-items-center h-8 w-8 rounded-lg bg-brand-600 text-white text-xs">QL</span>QuoteLoop</div>
+ <h1 class="text-4xl font-bold tracking-tight text-slate-900">Compare supplier quotes, negotiate with evidence, remember who delivered.</h1>
+ <p class="mt-4 text-lg text-slate-600">For event agencies juggling AV, print and catering vendors over WhatsApp. Your own Claude reads the quotes; QuoteLoop runs the comparison, the negotiation with the supplier and the history.</p>
+ <a href="/login" class="mt-8 inline-flex rounded-lg bg-brand-600 px-5 py-2.5 font-semibold text-white hover:bg-brand-700">Buyer login</a>
 </section>
 {% endblock %}

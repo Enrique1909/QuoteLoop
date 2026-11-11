@@ -1,28 +1,45 @@
 {% extends "base.html" %}
-{% block nav %}{% include "agency_nav.html" %}{% endblock %}
+{% from "macros.html" import badge, pill, btn %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
-<h2>{{ ws.name }} · Agreements</h2>
-<div class="grid grid-stats">
- <article><span class="total">{{ totals.awaiting }}</span><span class="muted">awaiting client</span></article>
- <article><span class="total">{{ totals.approved }}</span><span class="muted">approved</span></article>
- <article><span class="total">{{ totals.pending_crs }}</span><span class="muted">change requests pending</span></article>
+<div class="flex flex-wrap items-end justify-between gap-3">
+ <div><p class="text-sm text-slate-500">{{ ws.name }}</p><h1 class="text-2xl font-bold text-slate-900">Sourcing dashboard</h1></div>
+ <a href="/requests/new" class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">+ New request</a>
 </div>
-<br>
-{% if rows %}
-<table>
-<thead><tr><th>Client</th><th>Project</th><th>Status</th><th>Approved total</th><th>Change requests</th></tr></thead>
-<tbody>
-{% for r in rows %}
-<tr>
- <td><a href="/agreements/{{ r.id }}">{{ r.client }}</a>
-   {% if r.sample_data %}<span class="badge sample">sample data</span>{% endif %}
-   {% if r.created_via == 'claude' %}<span class="badge claude">via Claude</span>{% endif %}</td>
- <td>{{ r.project }}</td>
- <td><span class="badge s-{{ r.status }}">{{ status_label(r.status) }}</span></td>
- <td>{{ r.approved_total if r.status == 'approved' else '—' }}</td>
- <td>{% if r.pending_change_requests %}<span class="badge s-pending">{{ r.pending_change_requests }} pending</span>{% else %}<span class="muted">—</span>{% endif %}</td>
-</tr>
-{% endfor %}
-</tbody></table>
-{% else %}<p>No agreements yet. <a href="/agreements/new">Create one</a> or ask Claude.</p>{% endif %}
+<div class="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
+ {% for label, value, sub in [("Active requests", stats.active, "comparing or negotiating"), ("Open negotiations", stats.open, "with suppliers"), ("Agreements", stats.agreed, "closed deals"), ("Saved vs first quotes", inr(stats.saved), "on agreed deals")] %}
+ <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4"><p class="text-xs font-medium text-slate-500">{{ label }}</p><p class="mt-1 text-2xl font-bold num {% if loop.last %}text-emerald-600{% endif %}">{{ value }}</p><p class="text-xs text-slate-400">{{ sub }}</p></div>
+ {% endfor %}
+</div>
+<div class="mt-8 grid lg:grid-cols-3 gap-6">
+ <section class="lg:col-span-2 bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
+  <h2 class="px-5 py-3 font-semibold border-b border-slate-100">Sourcing requests</h2>
+  {% for x in rows %}
+  <a href="/requests/{{ x.r.id }}" class="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-100 last:border-0 hover:bg-slate-50">
+   <div class="min-w-0">
+    <p class="font-medium text-slate-900 truncate">{{ x.r.title }}</p>
+    <p class="text-xs text-slate-500 mt-0.5">{{ x.quotes }} quote{{ '' if x.quotes == 1 else 's' }}{% if x.r.needed_by %} · needed by {{ x.r.needed_by }}{% endif %}
+     {% if x.r.created_via == 'claude' %} · {{ pill('via Claude', 'bg-violet-100 text-violet-700') }}{% endif %}
+     {% if x.r.is_sample %} {{ pill('sample data') }}{% endif %}</p>
+   </div>
+   <div class="text-right shrink-0">
+    {{ badge(x.r.status) }}
+    {% if x.your_turn %}<p class="text-xs font-semibold text-sky-700 mt-1">{{ x.your_turn }} supplier repl{{ 'y' if x.your_turn == 1 else 'ies' }}</p>{% endif %}
+    {% if x.r.status == 'agreed' %}<p class="text-xs text-slate-500 mt-1 num">{{ inr(x.r.agreed_price_paise) }} with {{ x.agreed_with }}</p>{% elif x.lowest %}<p class="text-xs text-slate-500 mt-1 num">lowest {{ inr(x.lowest) }}</p>{% endif %}
+   </div>
+  </a>
+  {% else %}<p class="px-5 py-8 text-sm text-slate-500">No requests yet. Ask Claude to compare some quotes, or create one.</p>{% endfor %}
+ </section>
+ <section class="bg-white rounded-xl ring-1 ring-slate-200">
+  <h2 class="px-5 py-3 font-semibold border-b border-slate-100">Recent activity</h2>
+  <ul class="divide-y divide-slate-100">
+  {% for a in activity %}
+   <li class="px-5 py-3 text-sm"><a href="/negotiations/{{ a.n.id }}" class="hover:underline">
+    <span class="font-medium">{{ 'You' if a.o.author == 'buyer' else a.supplier }}</span>
+    {% if a.o.kind == 'accept' %}accepted <span class="num">{{ inr(a.o.price_paise) }}</span>{% elif a.o.kind == 'reject' %}rejected the offer{% else %}offered <span class="num">{{ inr(a.o.price_paise) }}</span>{% endif %}</a>
+    <p class="text-xs text-slate-400">{{ a.request }}</p></li>
+  {% else %}<li class="px-5 py-6 text-sm text-slate-500">Nothing yet.</li>{% endfor %}
+  </ul>
+ </section>
+</div>
 {% endblock %}

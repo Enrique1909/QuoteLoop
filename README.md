@@ -1,31 +1,39 @@
-# ClientRoom
+# QuoteLoop
 
-**From project brief to client approval, and every change after it.**
+**Compare supplier quotes, negotiate with evidence, and remember who actually delivered.**
 
-Small agencies describe a project to their own Claude. Claude creates a structured agreement in ClientRoom through MCP. The agency edits it and sends a review link; the client approves (or requests revisions) without needing Claude or an account. After approval, change requests (extra scope, price and days) go through the same link, and ClientRoom recalculates the approved total and final deadline.
+For small event agencies that buy AV, printing, catering and décor from the same vendors every month, with quotes arriving over email, WhatsApp and PDFs.
 
-- **No AI inside the app.** No model, no AI API keys. The customer's own Claude does the thinking via MCP; ClientRoom does storage, editing, sharing, approvals, version history and the arithmetic.
-- **Works without Claude too.** Agreements can be created and edited by hand.
+- The buyer's **own Claude** reads messy quotes and creates a comparison in QuoteLoop through MCP.
+- QuoteLoop calculates totals (base + delivery + tax, in integer paise), flags quotes that aren't comparable, and shows the buyer's **history with each supplier**: past quoted vs agreed prices, on-time record, ratings, issues.
+- Claude reads that history through MCP and **saves a suggested counteroffer as a draft**. Nothing is sent automatically.
+- The buyer edits and sends the offer. The **supplier opens a private link** (no account, no Claude, and they never see competitors' quotes), then accepts or counters.
+- On agreement, terms are locked, savings vs the first quote are calculated, and the outcome feeds the supplier's history for next time.
+
+**No AI inside the app:** no model, no AI API keys. Claude runs on the customer's own plan.
 
 ## Try it
-- App: `https://<your-render-url>` → log in with the demo account (credentials shared in the submission). Sample agreements are labelled **sample data**.
-- Connect Claude: in the app open **Connect Claude** to get this workspace's MCP URL, then in Claude go to **Settings → Connectors → Add custom connector** and paste it.
-- Try: *"Create a ClientRoom agreement for Acme Foods: website redesign, ₹1,00,000, five pages, two revision rounds, launch in four weeks."*
+- App: `https://<render-url>` → log in with the demo buyer account (credentials shared in the submission). Demo data is fictional and labelled **sample data**.
+- Connect Claude: **Connect Claude** page → copy the MCP URL → in Claude, **Settings → Connectors → Add custom connector**.
+- Sample quotes to attach in Claude: `docs/sample-quotes/` (an email, a WhatsApp message and a PDF-style quotation).
 
 ## MCP tools
-| Tool | What it does |
+| Tool | Purpose |
 |---|---|
-| `create_agreement` | Creates a draft agreement from a brief; returns the agency and client links |
-| `create_change_request` | Adds extra scope/price/days to an approved agreement for the client to approve |
-| `list_agreements` | Status, approved total and pending change requests for every agreement |
-| `get_agreement` | Full scope, version history and client responses |
+| `create_sourcing_comparison` | Save a sourcing request and the extracted quotations (marked unverified until the buyer checks them) |
+| `get_negotiation_context` | Current quote, other quotes (buyer-side only), history with the supplier, negotiation timeline |
+| `save_negotiation_draft` | Store a suggested counteroffer with reasoning and the history it relied on, for buyer review |
+| `list_sourcing_requests` | Status of all requests |
 
 ## Run locally
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/uvicorn app.main:app --reload
 ```
-Uses SQLite locally; set `DATABASE_URL` for Postgres. `DEMO_PASSWORD` sets the demo login password.
+SQLite by default; set `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct, used for table creation) for Neon Postgres. `DEMO_PASSWORD` sets the demo login.
 
-## Limits of this MVP
-Client approval is a documented confirmation (name + timestamp), not a legal e-signature. The MCP connection is authorised by a per-workspace key in the URL; production would use OAuth. No payments, invoicing or email sending yet.
+## Known limitations (POC)
+- One demo buyer organisation; MCP access uses a revocable per-workspace key in the URL (production: OAuth).
+- Supplier links are long random tokens scoped to one negotiation and revoked when another supplier wins; no supplier accounts.
+- Acceptance is a commercial record, not a legal e-signature. No payments, purchase orders, or WhatsApp/email sending.
+- Supplier performance can be recorded after an agreement; richer analytics are roadmap.

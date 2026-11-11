@@ -11,65 +11,124 @@ def now() -> datetime:
 
 
 class Workspace(SQLModel, table=True):
+    __tablename__ = "ql_workspace"
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     login_email: str = Field(index=True, unique=True)
     password_hash: str
     mcp_key: str = Field(default_factory=lambda: secrets.token_urlsafe(24), index=True, unique=True)
+
+
+class Supplier(SQLModel, table=True):
+    __tablename__ = "ql_supplier"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="ql_workspace.id", index=True)
+    name: str
+    contact: str = ""
+    category: str = ""
+    is_sample: bool = False
+
+
+class SourcingRequest(SQLModel, table=True):
+    __tablename__ = "ql_request"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="ql_workspace.id", index=True)
+    title: str
+    category: str = ""
+    specifications: str = ""
+    quantity: int = 1
+    unit: str = "unit"
+    needed_by: str = ""  # YYYY-MM-DD
+    currency: str = "INR"
+    status: str = "comparing"  # comparing | negotiating | agreed | closed
+    agreed_supplier_id: Optional[int] = None
+    agreed_price_paise: Optional[int] = None
+    agreed_at: Optional[datetime] = None
+    created_via: str = "app"  # app | claude
+    is_sample: bool = False
     created_at: datetime = Field(default_factory=now)
 
 
-class Agreement(SQLModel, table=True):
+class Quotation(SQLModel, table=True):
+    __tablename__ = "ql_quotation"
     id: Optional[int] = Field(default=None, primary_key=True)
-    workspace_id: int = Field(foreign_key="workspace.id", index=True)
-    client_name: str
-    client_email: str = ""
-    project_title: str
-    summary: str = ""
-    deliverables: list = Field(default_factory=list, sa_column=Column(JSON))
-    exclusions: list = Field(default_factory=list, sa_column=Column(JSON))
-    milestones: list = Field(default_factory=list, sa_column=Column(JSON))  # [{name, due_date}]
-    revision_limit: int = 2
-    base_price_paise: int = 0
-    currency: str = "INR"
-    status: str = "draft"  # draft | sent | revision_requested | approved
-    share_token: str = Field(default_factory=lambda: secrets.token_urlsafe(16), index=True, unique=True)
-    created_via: str = "app"  # app | claude
-    is_sample: bool = False
+    request_id: int = Field(foreign_key="ql_request.id", index=True)
+    supplier_id: int = Field(foreign_key="ql_supplier.id", index=True)
+    base_paise: int = 0
+    delivery_paise: int = 0
+    tax_paise: int = 0
+    quantity: int = 1
+    unit: str = "unit"
+    lead_time_days: Optional[int] = None
+    payment_terms: str = ""
+    scope: str = ""
+    exclusions: str = ""
+    verified: bool = False  # False = extracted by Claude, awaiting buyer check
+    created_via: str = "app"
+    created_at: datetime = Field(default_factory=now)
+
+    @property
+    def total_paise(self) -> int:
+        return self.base_paise + self.delivery_paise + self.tax_paise
+
+
+class Negotiation(SQLModel, table=True):
+    __tablename__ = "ql_negotiation"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    request_id: int = Field(foreign_key="ql_request.id", index=True)
+    supplier_id: int = Field(foreign_key="ql_supplier.id", index=True)
+    # draft | awaiting_supplier | awaiting_buyer | agreed | rejected | closed
+    status: str = "draft"
+    token: str = Field(default_factory=lambda: secrets.token_urlsafe(24), index=True, unique=True)
+    token_revoked: bool = False
     created_at: datetime = Field(default_factory=now)
     updated_at: datetime = Field(default_factory=now)
 
 
-class AgreementVersion(SQLModel, table=True):
+class Offer(SQLModel, table=True):
+    __tablename__ = "ql_offer"
     id: Optional[int] = Field(default=None, primary_key=True)
-    agreement_id: int = Field(foreign_key="agreement.id", index=True)
-    version_no: int
-    snapshot: dict = Field(default_factory=dict, sa_column=Column(JSON))
-    status: str = "sent"  # sent | revision_requested | approved
-    sent_at: datetime = Field(default_factory=now)
-    responded_by_name: str = ""
-    responded_at: Optional[datetime] = None
-    client_comment: str = ""
-
-
-class ChangeRequest(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    agreement_id: int = Field(foreign_key="agreement.id", index=True)
-    description: str
-    extra_price_paise: int = 0
-    extra_days: int = 0
-    status: str = "pending"  # pending | approved | declined
-    created_via: str = "app"
+    negotiation_id: int = Field(foreign_key="ql_negotiation.id", index=True)
+    author: str  # buyer | supplier
+    kind: str = "offer"  # offer | accept | reject
+    price_paise: Optional[int] = None
+    delivery_commitment: str = ""
+    terms: str = ""
+    message: str = ""
+    author_name: str = ""
     created_at: datetime = Field(default_factory=now)
-    responded_by_name: str = ""
-    responded_at: Optional[datetime] = None
 
 
-SNAPSHOT_FIELDS = [
-    "client_name", "client_email", "project_title", "summary", "deliverables",
-    "exclusions", "milestones", "revision_limit", "base_price_paise", "currency",
-]
+class NegotiationDraft(SQLModel, table=True):
+    __tablename__ = "ql_draft"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    negotiation_id: int = Field(foreign_key="ql_negotiation.id", index=True)
+    price_paise: int
+    delivery_commitment: str = ""
+    terms: str = ""
+    message: str = ""
+    reasoning: str = ""
+    references: list = Field(default_factory=list, sa_column=Column(JSON))
+    created_at: datetime = Field(default_factory=now)
 
 
-def snapshot(a: Agreement) -> dict:
-    return {f: getattr(a, f) for f in SNAPSHOT_FIELDS}
+class Engagement(SQLModel, table=True):
+    """Company-specific supplier history: what was quoted, agreed and actually delivered."""
+    __tablename__ = "ql_engagement"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="ql_workspace.id", index=True)
+    supplier_id: int = Field(foreign_key="ql_supplier.id", index=True)
+    request_id: Optional[int] = None
+    date: str  # YYYY-MM-DD
+    item: str
+    specifications: str = ""
+    quantity: int = 1
+    unit: str = "unit"
+    quoted_paise: int
+    agreed_paise: int
+    on_time: Optional[bool] = None  # None = not yet recorded
+    price_honored: Optional[bool] = None
+    scope_honored: Optional[bool] = None
+    rating: Optional[int] = None  # 1-5
+    notes: str = ""
+    is_sample: bool = False

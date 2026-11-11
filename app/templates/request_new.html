@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "macros.html" import input, btn %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block body %}
+<h1 class="text-2xl font-bold">New sourcing request</h1>
+<p class="text-sm text-slate-500 mt-1">Tip: you can also attach quotes in Claude and ask it to create the comparison.</p>
+<form method="post" action="/requests/new" class="mt-6 bg-white rounded-xl ring-1 ring-slate-200 p-6 space-y-4 max-w-2xl">
+ <label class="block text-sm font-medium">Title<input name="title" required class="mt-1 {{ input() }}" placeholder="AV for TechSummit 2026"></label>
+ <label class="block text-sm font-medium">Specifications<textarea name="specifications" rows="3" class="mt-1 {{ input() }}"></textarea></label>
+ <div class="grid sm:grid-cols-4 gap-4">
+  <label class="block text-sm font-medium">Category<input name="category" class="mt-1 {{ input() }}" placeholder="AV equipment"></label>
+  <label class="block text-sm font-medium">Quantity<input name="quantity" type="number" min="1" value="1" class="mt-1 {{ input() }}"></label>
+  <label class="block text-sm font-medium">Unit<input name="unit" value="event package" class="mt-1 {{ input() }}"></label>
+  <label class="block text-sm font-medium">Needed by<input name="needed_by" type="date" class="mt-1 {{ input() }}"></label>
+ </div>
+ <button class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Create request</button>
+</form>
+{% endblock %}

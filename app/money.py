@@ -1,13 +1,17 @@
-"""Deterministic money and date helpers. All amounts are integer paise."""
-from datetime import date, timedelta
+"""Deterministic money helpers. All amounts are integer paise; no floats in arithmetic."""
+from decimal import ROUND_HALF_UP, Decimal
 
 
 def inr_to_paise(value) -> int:
-    return int(round(float(value) * 100))
+    if value in (None, ""):
+        return 0
+    return int((Decimal(str(value)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
-def format_inr(paise: int) -> str:
-    """Format paise as Indian rupees with lakh/crore grouping, e.g. 11500000 -> ₹1,15,000."""
+def format_inr(paise) -> str:
+    """Indian grouping: 18500000 -> ₹1,85,000."""
+    if paise is None:
+        return "—"
     negative = paise < 0
     rupees, rem = divmod(abs(int(paise)), 100)
     s = str(rupees)
@@ -24,24 +28,7 @@ def format_inr(paise: int) -> str:
     return f"-{out}" if negative else out
 
 
-def approved_total(agreement, change_requests) -> int:
-    return agreement.base_price_paise + sum(
-        cr.extra_price_paise for cr in change_requests if cr.status == "approved"
-    )
-
-
-def approved_extra_days(change_requests) -> int:
-    return sum(cr.extra_days for cr in change_requests if cr.status == "approved")
-
-
-def final_deadline(agreement, change_requests):
-    """Last milestone due date plus approved extra days, or None if no dated milestone."""
-    dates = []
-    for m in agreement.milestones or []:
-        try:
-            dates.append(date.fromisoformat(str(m.get("due_date", ""))))
-        except ValueError:
-            continue
-    if not dates:
+def pct(part, whole):
+    if not whole:
         return None
-    return max(dates) + timedelta(days=approved_extra_days(change_requests))
+    return round((Decimal(part) / Decimal(whole)) * 100, 1)

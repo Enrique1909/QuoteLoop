@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "macros.html" import badge, pill, btn, input %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block body %}
+<a href="/requests/{{ r.id }}" class="text-sm text-slate-500 hover:underline">← {{ r.title }}</a>
+<div class="mt-2 flex flex-wrap items-center gap-3"><h1 class="text-2xl font-bold">Negotiation with {{ sup.name }}</h1>{{ badge(n.status) }}</div>
+{% if error %}<div class="mt-4 rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 text-sm text-rose-800">{{ error }}</div>{% endif %}
+
+<div class="mt-6 grid lg:grid-cols-5 gap-6">
+ <div class="lg:col-span-2 space-y-6">
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 p-5">
+   <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Their original quote</h2>
+   <p class="mt-1 text-2xl font-bold num">{{ inr(q.total_paise) }}</p>
+   <p class="text-xs text-slate-500 num">Base {{ inr(q.base_paise) }} · delivery {{ inr(q.delivery_paise) if q.delivery_paise else 'incl.' }} · tax {{ inr(q.tax_paise) if q.tax_paise else '—' }}</p>
+   <p class="mt-2 text-sm">{{ (q.lead_time_days ~ ' days lead time') if q.lead_time_days is not none else 'Lead time not stated' }} · {{ q.payment_terms or 'terms not stated' }}</p>
+  </section>
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 p-5">
+   <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your history with {{ sup.name }}</h2>
+   {% if hist.engagements %}
+   <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+    <div class="rounded-lg bg-slate-50 p-2"><p class="text-lg font-bold">{{ hist.engagements }}</p><p class="text-[11px] text-slate-500">past jobs</p></div>
+    <div class="rounded-lg {{ 'bg-rose-50' if hist.on_time_rate is not none and hist.on_time_rate < 70 else 'bg-emerald-50' }} p-2"><p class="text-lg font-bold">{{ (hist.on_time_rate|int ~ '%') if hist.on_time_rate is not none else '—' }}</p><p class="text-[11px] text-slate-500">on time</p></div>
+    <div class="rounded-lg bg-slate-50 p-2"><p class="text-lg font-bold">{{ hist.avg_discount_pct or 0 }}%</p><p class="text-[11px] text-slate-500">avg below quote</p></div>
+   </div>
+   <ul class="mt-3 space-y-2 text-xs">{% for e in hist.rows[:4] %}
+    <li class="border-t border-slate-100 pt-2"><p class="font-medium text-slate-700">{{ e.date }} · {{ e.item }}</p><p class="text-slate-500">{{ e.specifications }} · {{ e.quantity }} {{ e.unit }}</p>
+     <p class="num">Quoted {{ inr(e.quoted_paise) }} → agreed <strong>{{ inr(e.agreed_paise) }}</strong>{% if e.on_time is not none %} · {{ 'on time' if e.on_time else 'LATE' }}{% endif %}{% if e.rating %} · ★{{ e.rating }}{% endif %}</p>
+     {% if e.notes %}<p class="italic text-slate-500">“{{ e.notes }}”</p>{% endif %}</li>{% endfor %}</ul>
+   {% else %}<p class="mt-2 text-sm text-slate-500">No history yet with this supplier.</p>{% endif %}
+  </section>
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 p-5">
+   <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Timeline</h2>
+   {% set buyer_label = "You" %}{% set supplier_label = sup.name %}{% include "timeline.html" %}
+  </section>
+ </div>
+
+ <div class="lg:col-span-3 space-y-6">
+  {% if draft and n.status in ('draft', 'awaiting_buyer') %}
+  <section class="rounded-xl ring-1 ring-violet-200 bg-violet-50/60 p-5">
+   <div class="flex items-center gap-2">{{ pill('Suggested by your Claude', 'bg-violet-600 text-white') }}<span class="text-xs text-violet-700">review before sending: nothing is sent automatically</span></div>
+   <p class="mt-3 text-2xl font-bold num text-violet-900">{{ inr(draft.price_paise) }}</p>
+   {% if draft.reasoning %}<p class="mt-2 text-sm text-slate-700 whitespace-pre-line">{{ draft.reasoning }}</p>{% endif %}
+   {% if draft.references %}<ul class="mt-2 list-disc ml-5 text-xs text-slate-600">{% for ref in draft.references %}<li>{{ ref }}</li>{% endfor %}</ul>{% endif %}
+  </section>
+  {% endif %}
+
+  {% if n.status == 'awaiting_buyer' and last_sup %}
+  <section class="rounded-xl ring-2 ring-sky-300 bg-white p-5">
+   <p class="text-xs font-semibold uppercase tracking-wide text-sky-700">{{ sup.name }} countered</p>
+   <p class="mt-1 text-3xl font-bold num">{{ inr(last_sup.price_paise) }}</p>
+   {% if last_sup.delivery_commitment %}<p class="text-sm text-slate-600">{{ last_sup.delivery_commitment }}</p>{% endif %}
+   {% if last_sup.message %}<p class="mt-2 text-sm bg-slate-50 rounded-lg px-3 py-2">“{{ last_sup.message }}”</p>{% endif %}
+   <div class="mt-4 flex flex-wrap gap-2">
+    <form method="post" action="/negotiations/{{ n.id }}/accept"><button class="{{ btn('bg-emerald-600 text-white hover:bg-emerald-700') }}">✓ Accept {{ inr(last_sup.price_paise) }}</button></form>
+    <form method="post" action="/negotiations/{{ n.id }}/reject"><button class="{{ btn('text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50') }}">Reject</button></form>
+   </div>
+   <p class="mt-3 text-xs text-slate-500">Or send a new counteroffer below.</p>
+  </section>
+  {% endif %}
+
+  {% if prefill %}
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 p-5">
+   <h2 class="font-semibold">{{ 'Counteroffer' if n.status == 'awaiting_buyer' else 'Your offer' }}</h2>
+   <form method="post" action="/negotiations/{{ n.id }}/offer" class="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
+    <label class="block font-medium">All-inclusive price (₹)<input name="price_inr" type="number" step="1" min="1" required value="{{ prefill.price }}" class="mt-1 {{ input() }} text-lg font-semibold"></label>
+    <label class="block font-medium">Delivery commitment<input name="delivery" value="{{ prefill.delivery }}" class="mt-1 {{ input() }}"></label>
+    <label class="sm:col-span-2 block font-medium">Payment terms<input name="terms" value="{{ prefill.terms }}" class="mt-1 {{ input() }}"></label>
+    <label class="sm:col-span-2 block font-medium">Message to supplier<textarea name="message" rows="4" class="mt-1 {{ input() }}">{{ prefill.message }}</textarea></label>
+    <button class="sm:col-span-2 justify-self-start {{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Send offer to {{ sup.name }}</button>
+   </form>
+   <p class="mt-3 text-xs text-slate-400">Suggested terms are proposals; you decide what is sent.</p>
+  </section>
+  {% endif %}
+
+  {% if n.status in ('awaiting_supplier', 'awaiting_buyer', 'agreed') %}
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 p-5">
+   <h2 class="font-semibold">Supplier's private link</h2>
+   <p class="text-xs text-slate-500">{{ sup.name }} sees only their own quote and this negotiation. No account or Claude needed.</p>
+   <div class="mt-3 flex items-center gap-2"><input readonly value="{{ link }}" id="lnk" class="{{ input() }} text-xs font-mono"><button onclick="navigator.clipboard.writeText(document.getElementById('lnk').value);this.textContent='Copied'" class="{{ btn('ring-1 ring-slate-300 hover:bg-slate-50') }}">Copy</button></div>
+   <div class="mt-3 flex flex-wrap gap-2 text-sm">
+    <a href="{{ wa }}" target="_blank" class="{{ btn('bg-[#25D366] text-white hover:opacity-90') }}">Share on WhatsApp</a>
+    <a href="{{ mail }}" class="{{ btn('ring-1 ring-slate-300 hover:bg-slate-50') }}">Email</a>
+    <a href="{{ link }}" target="_blank" class="{{ btn('text-brand-700 hover:bg-brand-50') }}">Open as supplier ↗</a>
+   </div>
+  </section>
+  {% endif %}
+  {% if n.status == 'agreed' %}<section class="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 p-5 text-sm">✅ Agreed. See the final terms on the <a href="/requests/{{ r.id }}" class="font-semibold underline">request page</a>.</section>{% endif %}
+ </div>
+</div>
+{% endblock %}

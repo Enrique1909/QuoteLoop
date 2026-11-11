@@ -1,6 +1,9 @@
 import contextlib
 import os
+import time
+from collections import defaultdict, deque
 from pathlib import Path
+from urllib.parse import quote as urlquote
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,8 +15,8 @@ from app import services
 from app.auth import LoginRequired, check_password, current_workspace_id, require_login
 from app.db import get_session, init_db
 from app.mcp_server import WorkspaceKeyRouter, mcp
-from app.models import Agreement, Workspace
-from app.money import approved_total, final_deadline, format_inr, inr_to_paise
+from app.models import (Engagement, Negotiation, Offer, Quotation, SourcingRequest, Supplier, Workspace)
+from app.money import format_inr, inr_to_paise, pct
 from app.seed import DEMO_EMAIL, seed
 
 
@@ -25,19 +28,35 @@ async def lifespan(app: FastAPI):
         yield
 
 
-app = FastAPI(title="ClientRoom", lifespan=lifespan)
+app = FastAPI(title="QuoteLoop", lifespan=lifespan)
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "dev-secret-change-me"),
                    same_site="lax", https_only=bool(os.environ.get("RENDER")))
 app.mount("/mcp", WorkspaceKeyRouter())
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-templates.env.globals["inr"] = format_inr
-
-STATUS_LABELS = {
-    "draft": "Draft", "sent": "Awaiting client", "revision_requested": "Revision requested",
-    "approved": "Approved", "pending": "Awaiting client", "declined": "Declined",
+STATUS = {
+    "comparing": ("Comparing quotes", "bg-slate-100 text-slate-700"),
+    "negotiating": ("Negotiating", "bg-amber-100 text-amber-800"),
+    "agreed": ("Agreed", "bg-emerald-100 text-emerald-800"),
+    "closed": ("Closed", "bg-slate-100 text-slate-500"),
+    "draft": ("Not sent yet", "bg-slate-100 text-slate-700"),
+    "awaiting_supplier": ("Waiting for supplier", "bg-amber-100 text-amber-800"),
+    "awaiting_buyer": ("Supplier replied: your turn", "bg-sky-100 text-sky-800"),
+    "rejected": ("Rejected", "bg-rose-100 text-rose-700"),
 }
-templates.env.globals["status_label"] = lambda s: STATUS_LABELS.get(s, s)
+templates.env.globals.update(inr=format_inr, status=lambda k: STATUS.get(k, (k, "bg-slate-100 text-slate-700")))
+
+RATE = defaultdict(deque)
+
+
+def rate_limited(key: str, limit: int = 10, window: int = 60) -> bool:
+    q, t = RATE[key], time.time()
+    while q and q[0] < t - window:
+        q.popleft()
+    if len(q) >= limit:
+        return True
+    q.append(t)
+    return False
 
 
 @app.exception_handler(LoginRequired)
@@ -49,18 +68,6 @@ def render(request: Request, name: str, **ctx):
     return templates.TemplateResponse(request, name, ctx)
 
 
-def lines(text: str) -> list[str]:
-    return [l.strip() for l in (text or "").splitlines() if l.strip()]
-
-
-def parse_milestones(text: str) -> list[dict]:
-    out = []
-    for l in lines(text):
-        name, _, due = l.partition("|")
-        out.append({"name": name.strip(), "due_date": due.strip()})
-    return out
-
-
 def base_url(request: Request) -> str:
     env = os.environ.get("PUBLIC_BASE_URL")
     if env:
@@ -69,7 +76,14 @@ def base_url(request: Request) -> str:
     return f"{proto}://{request.headers.get('host', request.url.netloc)}"
 
 
-# ---------- health & landing ----------
+def to_int(v):
+    try:
+        return int(v) if str(v).strip() != "" else None
+    except ValueError:
+        return None
+
+
+# ---------- public ----------
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -79,10 +93,9 @@ def health():
 def home(request: Request):
     if current_workspace_id(request):
         return RedirectResponse("/dashboard", status_code=303)
-    return render(request, "home.html", demo_email=DEMO_EMAIL)
+    return render(request, "home.html")
 
 
-# ---------- auth ----------
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     return render(request, "login.html", error=None, demo_email=DEMO_EMAIL)
@@ -104,105 +117,232 @@ def logout(request: Request):
     return RedirectResponse("/", status_code=303)
 
 
-# ---------- agency ----------
+# ---------- buyer ----------
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     wid = require_login(request)
     with get_session() as s:
         ws = s.get(Workspace, wid)
-        rows = [services.summary(s, a) | {"created_via": a.created_via} for a in
-                s.exec(select(Agreement).where(Agreement.workspace_id == wid).order_by(Agreement.updated_at.desc()))]
-    totals = {
-        "approved": sum(1 for r in rows if r["status"] == "approved"),
-        "awaiting": sum(1 for r in rows if r["status"] == "sent"),
-        "pending_crs": sum(r["pending_change_requests"] for r in rows),
-    }
-    return render(request, "dashboard.html", ws=ws, rows=rows, totals=totals)
+        reqs = list(s.exec(select(SourcingRequest).where(SourcingRequest.workspace_id == wid)
+                           .order_by(SourcingRequest.id.desc())))
+        rows, saved, open_negs = [], 0, 0
+        for r in reqs:
+            qs = services.quotations(s, r.id)
+            negs = list(s.exec(select(Negotiation).where(Negotiation.request_id == r.id)))
+            open_negs += sum(1 for n in negs if n.status in ("awaiting_supplier", "awaiting_buyer"))
+            your_turn = sum(1 for n in negs if n.status == "awaiting_buyer")
+            first = services.quote_for(s, r.id, r.agreed_supplier_id) if r.agreed_supplier_id else None
+            r_saved = (first.total_paise - r.agreed_price_paise) if first and r.agreed_price_paise else 0
+            saved += max(0, r_saved)
+            low = min((q.total_paise for q in qs), default=None)
+            rows.append({"r": r, "quotes": len(qs), "lowest": low, "your_turn": your_turn, "saved": r_saved,
+                         "agreed_with": s.get(Supplier, r.agreed_supplier_id).name if r.agreed_supplier_id else None})
+        req_ids = [r.id for r in reqs]
+        activity = []
+        if req_ids:
+            negs = {n.id: n for n in s.exec(select(Negotiation).where(Negotiation.request_id.in_(req_ids)))}
+            for o in s.exec(select(Offer).where(Offer.negotiation_id.in_(list(negs) or [0])).order_by(Offer.id.desc()).limit(6)):
+                n = negs[o.negotiation_id]
+                activity.append({"o": o, "n": n, "supplier": s.get(Supplier, n.supplier_id).name,
+                                 "request": s.get(SourcingRequest, n.request_id).title})
+    stats = {"active": sum(1 for r in reqs if r.status in ("comparing", "negotiating")), "open": open_negs,
+             "agreed": sum(1 for r in reqs if r.status == "agreed"), "saved": saved}
+    return render(request, "dashboard.html", ws=ws, rows=rows, stats=stats, activity=activity)
 
 
-@app.get("/agreements/new", response_class=HTMLResponse)
-def new_agreement(request: Request):
+@app.get("/requests/new", response_class=HTMLResponse)
+def new_request_page(request: Request):
     require_login(request)
-    return render(request, "edit.html", a=None)
+    return render(request, "request_new.html")
 
 
-def _form_fields(client_name, client_email, project_title, summary, deliverables, exclusions, milestones,
-                 revision_limit, price_inr):
-    return dict(client_name=client_name, client_email=client_email, project_title=project_title, summary=summary,
-                deliverables=lines(deliverables), exclusions=lines(exclusions), milestones=parse_milestones(milestones),
-                revision_limit=int(revision_limit or 0), base_price_paise=inr_to_paise(price_inr or 0))
-
-
-@app.post("/agreements/new")
-def create_agreement(request: Request, client_name: str = Form(...), client_email: str = Form(""),
-                     project_title: str = Form(...), summary: str = Form(""), deliverables: str = Form(""),
-                     exclusions: str = Form(""), milestones: str = Form(""), revision_limit: int = Form(2),
-                     price_inr: float = Form(0)):
+@app.post("/requests/new")
+def new_request(request: Request, title: str = Form(...), category: str = Form(""), specifications: str = Form(""),
+                quantity: int = Form(1), unit: str = Form("event package"), needed_by: str = Form("")):
     wid = require_login(request)
-    f = _form_fields(client_name, client_email, project_title, summary, deliverables, exclusions, milestones,
-                     revision_limit, price_inr)
     with get_session() as s:
-        price = f.pop("base_price_paise")
-        a = services.create_agreement(s, wid, price_paise=price, **f)
-        return RedirectResponse(f"/agreements/{a.id}", status_code=303)
+        r = SourcingRequest(workspace_id=wid, title=title.strip(), category=category.strip(),
+                            specifications=specifications.strip(), quantity=max(1, quantity),
+                            unit=unit.strip() or "unit", needed_by=needed_by.strip())
+        s.add(r)
+        s.commit()
+        s.refresh(r)
+        return RedirectResponse(f"/requests/{r.id}", status_code=303)
 
 
-@app.get("/agreements/{aid}", response_class=HTMLResponse)
-def agreement_page(request: Request, aid: int):
+@app.get("/requests/{rid}", response_class=HTMLResponse)
+def request_page(request: Request, rid: int):
     wid = require_login(request)
     with get_session() as s:
         try:
-            a = services.get_agreement(s, wid, aid)
+            r = services.get_request(s, wid, rid)
         except services.NotFound:
             return RedirectResponse("/dashboard", status_code=303)
-        crs = services.change_requests(s, aid)
-        vs = services.versions(s, aid)
-        return render(request, "agreement.html", a=a, crs=crs, versions=vs,
-                      total=approved_total(a, crs), deadline=final_deadline(a, crs),
-                      client_url=f"{base_url(request)}/c/{a.share_token}")
+        rows = services.comparison(s, r)
+        agreed = None
+        if r.agreed_supplier_id:
+            first = services.quote_for(s, r.id, r.agreed_supplier_id)
+            eng = s.exec(select(Engagement).where(Engagement.request_id == r.id)).first()
+            agreed = {"supplier": s.get(Supplier, r.agreed_supplier_id), "first": first,
+                      "saved": first.total_paise - r.agreed_price_paise if first else 0,
+                      "saved_pct": pct(first.total_paise - r.agreed_price_paise, first.total_paise) if first else None,
+                      "engagement": eng}
+        return render(request, "request.html", r=r, rows=rows, agreed=agreed,
+                      unverified=sum(1 for x in rows if not x["q"].verified))
 
 
-@app.get("/agreements/{aid}/edit", response_class=HTMLResponse)
-def edit_page(request: Request, aid: int):
+@app.post("/requests/{rid}/quotes")
+def add_quote(request: Request, rid: int, supplier_name: str = Form(...), base_inr: str = Form("0"),
+              delivery_inr: str = Form("0"), tax_inr: str = Form("0"), quantity: str = Form(""), unit: str = Form(""),
+              lead_time_days: str = Form(""), payment_terms: str = Form(""), scope: str = Form(""),
+              exclusions: str = Form("")):
     wid = require_login(request)
     with get_session() as s:
-        a = services.get_agreement(s, wid, aid)
-        return render(request, "edit.html", a=a)
+        r = services.get_request(s, wid, rid)
+        sup = services.get_or_create_supplier(s, wid, supplier_name, category=r.category)
+        s.add(Quotation(request_id=r.id, supplier_id=sup.id, base_paise=inr_to_paise(base_inr or 0),
+                        delivery_paise=inr_to_paise(delivery_inr or 0), tax_paise=inr_to_paise(tax_inr or 0),
+                        quantity=to_int(quantity) or r.quantity, unit=unit.strip() or r.unit,
+                        lead_time_days=to_int(lead_time_days), payment_terms=payment_terms.strip(),
+                        scope=scope.strip(), exclusions=exclusions.strip(), verified=True))
+        s.commit()
+    return RedirectResponse(f"/requests/{rid}", status_code=303)
 
 
-@app.post("/agreements/{aid}/edit")
-def edit_agreement(request: Request, aid: int, client_name: str = Form(...), client_email: str = Form(""),
-                   project_title: str = Form(...), summary: str = Form(""), deliverables: str = Form(""),
-                   exclusions: str = Form(""), milestones: str = Form(""), revision_limit: int = Form(2),
-                   price_inr: float = Form(0)):
+def _owned_quote(s, wid, qid):
+    q = s.get(Quotation, qid)
+    if not q:
+        raise services.NotFound("Quote not found")
+    r = services.get_request(s, wid, q.request_id)
+    return q, r
+
+
+@app.get("/quotes/{qid}/edit", response_class=HTMLResponse)
+def edit_quote_page(request: Request, qid: int):
     wid = require_login(request)
     with get_session() as s:
-        a = services.get_agreement(s, wid, aid)
-        services.update_agreement(s, a, **_form_fields(client_name, client_email, project_title, summary,
-                                                       deliverables, exclusions, milestones, revision_limit, price_inr))
-    return RedirectResponse(f"/agreements/{aid}", status_code=303)
+        q, r = _owned_quote(s, wid, qid)
+        return render(request, "quote_edit.html", q=q, r=r, supplier=s.get(Supplier, q.supplier_id))
 
 
-@app.post("/agreements/{aid}/send")
-def send_agreement(request: Request, aid: int):
+@app.post("/quotes/{qid}/edit")
+def edit_quote(request: Request, qid: int, base_inr: str = Form("0"), delivery_inr: str = Form("0"),
+               tax_inr: str = Form("0"), quantity: str = Form(""), unit: str = Form(""), lead_time_days: str = Form(""),
+               payment_terms: str = Form(""), scope: str = Form(""), exclusions: str = Form("")):
     wid = require_login(request)
     with get_session() as s:
-        services.send_agreement(s, services.get_agreement(s, wid, aid))
-    return RedirectResponse(f"/agreements/{aid}?sent=1", status_code=303)
+        q, r = _owned_quote(s, wid, qid)
+        if r.status == "agreed":
+            return RedirectResponse(f"/requests/{r.id}", status_code=303)
+        q.base_paise, q.delivery_paise, q.tax_paise = (inr_to_paise(base_inr or 0), inr_to_paise(delivery_inr or 0),
+                                                       inr_to_paise(tax_inr or 0))
+        q.quantity = to_int(quantity) or r.quantity
+        q.unit = unit.strip() or r.unit
+        q.lead_time_days = to_int(lead_time_days)
+        q.payment_terms, q.scope, q.exclusions = payment_terms.strip(), scope.strip(), exclusions.strip()
+        q.verified = True
+        s.add(q)
+        s.commit()
+        return RedirectResponse(f"/requests/{r.id}?saved=1", status_code=303)
 
 
-@app.post("/agreements/{aid}/change-requests")
-def add_change_request(request: Request, aid: int, description: str = Form(...), extra_price_inr: float = Form(0),
-                       extra_days: int = Form(0)):
+@app.post("/requests/{rid}/negotiate/{sid}")
+def start_negotiation(request: Request, rid: int, sid: int):
     wid = require_login(request)
     with get_session() as s:
-        a = services.get_agreement(s, wid, aid)
+        r = services.get_request(s, wid, rid)
+        services.get_supplier(s, wid, sid)
+        n = services.get_or_create_negotiation(s, r, sid)
+        return RedirectResponse(f"/negotiations/{n.id}", status_code=303)
+
+
+@app.get("/negotiations/{nid}", response_class=HTMLResponse)
+def negotiation_page(request: Request, nid: int, error: str = ""):
+    wid = require_login(request)
+    with get_session() as s:
         try:
-            services.create_change_request(s, a, description=description, extra_price_paise=inr_to_paise(extra_price_inr),
-                                           extra_days=extra_days)
-        except ValueError:
+            n = services.get_negotiation(s, wid, nid)
+        except services.NotFound:
+            return RedirectResponse("/dashboard", status_code=303)
+        r = s.get(SourcingRequest, n.request_id)
+        sup = s.get(Supplier, n.supplier_id)
+        q = services.quote_for(s, r.id, sup.id)
+        offers = services.timeline(s, n.id)
+        draft = services.latest_draft(s, n.id)
+        last_sup = services.latest_offer(s, n.id, "supplier")
+        last_buy = services.latest_offer(s, n.id, "buyer")
+        hist = services.history_summary(s, wid, sup.id)
+        link = f"{base_url(request)}/s/{n.token}"
+        msg = (f"Hi, here is our offer for {r.title}. Please review and respond here: {link}")
+        prefill = None
+        if n.status in ("draft", "awaiting_buyer"):
+            if draft:
+                prefill = {"price": draft.price_paise // 100, "delivery": draft.delivery_commitment,
+                           "terms": draft.terms, "message": draft.message}
+            else:
+                prefill = {"price": (last_sup.price_paise if last_sup else q.total_paise) // 100,
+                           "delivery": r.needed_by and f"By {r.needed_by}" or "", "terms": q.payment_terms, "message": ""}
+        return render(request, "negotiation.html", n=n, r=r, sup=sup, q=q, offers=offers, draft=draft,
+                      last_sup=last_sup, last_buy=last_buy, hist=hist, link=link, prefill=prefill, error=error,
+                      wa=f"https://wa.me/?text={urlquote(msg)}",
+                      mail=f"mailto:?subject={urlquote('Offer: ' + r.title)}&body={urlquote(msg)}")
+
+
+@app.post("/negotiations/{nid}/offer")
+def send_offer(request: Request, nid: int, price_inr: str = Form(...), delivery: str = Form(""), terms: str = Form(""),
+               message: str = Form("")):
+    wid = require_login(request)
+    with get_session() as s:
+        n = services.get_negotiation(s, wid, nid)
+        try:
+            services.buyer_send_offer(s, n, price_paise=inr_to_paise(price_inr or 0), delivery=delivery, terms=terms,
+                                      message=message)
+        except services.InvalidState as e:
+            return RedirectResponse(f"/negotiations/{nid}?error={urlquote(str(e))}", status_code=303)
+    return RedirectResponse(f"/negotiations/{nid}?sent=1", status_code=303)
+
+
+@app.post("/negotiations/{nid}/accept")
+def accept_offer(request: Request, nid: int):
+    wid = require_login(request)
+    with get_session() as s:
+        n = services.get_negotiation(s, wid, nid)
+        try:
+            services.buyer_accept(s, n)
+        except services.InvalidState as e:
+            return RedirectResponse(f"/negotiations/{nid}?error={urlquote(str(e))}", status_code=303)
+        return RedirectResponse(f"/requests/{n.request_id}?agreed=1", status_code=303)
+
+
+@app.post("/negotiations/{nid}/reject")
+def reject_offer(request: Request, nid: int):
+    wid = require_login(request)
+    with get_session() as s:
+        n = services.get_negotiation(s, wid, nid)
+        try:
+            services.buyer_reject(s, n)
+        except services.InvalidState:
             pass
-    return RedirectResponse(f"/agreements/{aid}", status_code=303)
+    return RedirectResponse(f"/negotiations/{nid}", status_code=303)
+
+
+@app.post("/engagements/{eid}/outcome")
+def record_outcome(request: Request, eid: int, on_time: str = Form(""), price_honored: str = Form(""),
+                   scope_honored: str = Form(""), rating: str = Form(""), notes: str = Form(""), back: str = Form("/")):
+    wid = require_login(request)
+    yn = lambda v: True if v == "yes" else False if v == "no" else None
+    with get_session() as s:
+        services.record_outcome(s, wid, eid, on_time=yn(on_time), price_honored=yn(price_honored),
+                                scope_honored=yn(scope_honored), rating=to_int(rating), notes=notes)
+    return RedirectResponse(back if back.startswith("/") else "/", status_code=303)
+
+
+@app.get("/suppliers/{sid}", response_class=HTMLResponse)
+def supplier_page(request: Request, sid: int):
+    wid = require_login(request)
+    with get_session() as s:
+        sup = services.get_supplier(s, wid, sid)
+        return render(request, "supplier.html", sup=sup, hist=services.history_summary(s, wid, sid))
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -213,46 +353,40 @@ def settings_page(request: Request):
     return render(request, "settings.html", ws=ws, mcp_url=f"{base_url(request)}/mcp/{ws.mcp_key}")
 
 
-# ---------- client (no login) ----------
-def _by_token(s, token: str):
-    return s.exec(select(Agreement).where(Agreement.share_token == token)).first()
+# ---------- supplier (private link, no account) ----------
+def _neg_by_token(s, token):
+    return s.exec(select(Negotiation).where(Negotiation.token == token)).first()
 
 
-@app.get("/c/{token}", response_class=HTMLResponse)
-def client_page(request: Request, token: str, done: str = ""):
+@app.get("/s/{token}", response_class=HTMLResponse)
+def supplier_link(request: Request, token: str, done: str = "", error: str = ""):
     with get_session() as s:
-        a = _by_token(s, token)
-        if not a or a.status == "draft" and not services.versions(s, a.id):
-            return render(request, "client_missing.html")
-        v = services.latest_version(s, a.id)
-        crs = services.change_requests(s, a.id)
-        ws = s.get(Workspace, a.workspace_id)
-        scope = v.snapshot if v else {}
-        return render(request, "client.html", a=a, v=v, scope=scope, crs=crs, ws=ws, done=done,
-                      total=approved_total(a, crs), deadline=final_deadline(a, crs),
-                      editing=(a.status == "draft"))
+        n = _neg_by_token(s, token)
+        if not n or (n.token_revoked and n.status != "agreed"):
+            return render(request, "supplier_missing.html")
+        r = s.get(SourcingRequest, n.request_id)
+        sup = s.get(Supplier, n.supplier_id)
+        ws = s.get(Workspace, r.workspace_id)
+        q = services.quote_for(s, r.id, sup.id)  # only THIS supplier's own quote is shown
+        offers = services.timeline(s, n.id)
+        current = services.latest_offer(s, n.id, "buyer")
+        return render(request, "supplier_link.html", n=n, r=r, sup=sup, ws=ws, q=q, offers=offers,
+                      current=current, done=done, error=error)
 
 
-@app.post("/c/{token}/respond")
-def client_respond(request: Request, token: str, decision: str = Form(...), name: str = Form(...),
-                   comment: str = Form("")):
+@app.post("/s/{token}/respond")
+def supplier_respond(request: Request, token: str, action: str = Form(...), name: str = Form(""),
+                     price_inr: str = Form(""), delivery: str = Form(""), message: str = Form("")):
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0]
+    if rate_limited(f"{token}:{ip}"):
+        return RedirectResponse(f"/s/{token}?error={urlquote('Too many attempts. Please wait a minute.')}", status_code=303)
     with get_session() as s:
-        a = _by_token(s, token)
-        if a:
-            try:
-                services.client_respond(s, a, approve=(decision == "approve"), name=name, comment=comment)
-            except ValueError:
-                pass
-    return RedirectResponse(f"/c/{token}?done={decision}", status_code=303)
-
-
-@app.post("/c/{token}/change-requests/{cr_id}")
-def client_change_request(request: Request, token: str, cr_id: int, decision: str = Form(...), name: str = Form(...)):
-    with get_session() as s:
-        a = _by_token(s, token)
-        if a:
-            try:
-                services.respond_change_request(s, a, cr_id, approve=(decision == "approve"), name=name)
-            except ValueError:
-                pass
-    return RedirectResponse(f"/c/{token}?done=cr-{decision}", status_code=303)
+        n = _neg_by_token(s, token)
+        if not n:
+            return RedirectResponse(f"/s/{token}", status_code=303)
+        try:
+            services.supplier_respond(s, n, action=action, name=name, price_paise=inr_to_paise(price_inr or 0),
+                                      delivery=delivery, message=message)
+        except services.InvalidState as e:
+            return RedirectResponse(f"/s/{token}?error={urlquote(str(e))}", status_code=303)
+    return RedirectResponse(f"/s/{token}?done={action}", status_code=303)
