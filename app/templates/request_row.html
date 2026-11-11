@@ -1,0 +1,19 @@
+{# one sourcing request row; expects x #}
+{% from "macros.html" import badge %}
+<a href="/requests/{{ x.r.id }}" class="flex items-center justify-between gap-4 px-5 py-3.5 border-l-4 {{ accent(x.state) }} {{ 'bg-sky-50/60' if x.your_turn else '' }} hover:bg-slate-50 transition">
+ <div class="min-w-0">
+  <div class="flex items-center gap-2 flex-wrap">
+   <p class="font-medium text-slate-900 truncate">{{ x.r.title }}</p>
+   {% if x.r.category %}<span class="rounded-full px-2 py-0.5 text-[11px] font-medium {{ cat_cls(x.r.category) }}">{{ x.r.category }}</span>{% endif %}
+   {% if x.r.created_via == 'claude' %}<span class="rounded-full px-2 py-0.5 text-[11px] font-medium bg-violet-600 text-white">via Claude</span>{% endif %}
+  </div>
+  <p class="text-xs text-slate-500 mt-0.5">{{ x.quotes }} quote{{ '' if x.quotes == 1 else 's' }}{% if x.r.needed_by %} · needed by {{ x.r.needed_by }}{% endif %}{% if x.r.is_sample %} · sample{% endif %}</p>
+ </div>
+ <div class="text-right shrink-0">
+  {% if x.your_turn %}<span class="inline-flex items-center gap-1 rounded-full bg-sky-600 px-2.5 py-0.5 text-xs font-semibold text-white">● Your turn</span>
+  {% elif x.waiting %}<span class="inline-flex rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Waiting for supplier</span>
+  {% else %}{{ badge(x.r.status) }}{% endif %}
+  {% if x.r.status == 'agreed' %}<p class="text-xs text-slate-500 mt-1 num">{{ inr(x.r.agreed_price_paise) }} · {{ x.agreed_with }}{% if x.saved > 0 %} · <span class="text-emerald-700">saved {{ inr(x.saved) }}</span>{% endif %}</p>
+  {% elif x.lowest %}<p class="text-xs text-slate-500 mt-1 num">lowest quote {{ inr(x.lowest) }}</p>{% endif %}
+ </div>
+</a>

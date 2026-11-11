@@ -45,6 +45,13 @@ STATUS = {
     "rejected": ("Rejected", "bg-rose-100 text-rose-700"),
 }
 templates.env.globals.update(inr=format_inr, status=lambda k: STATUS.get(k, (k, "bg-slate-100 text-slate-700")))
+CATEGORY = {"av equipment": "bg-violet-100 text-violet-700", "printing": "bg-sky-100 text-sky-700",
+            "catering": "bg-orange-100 text-orange-700", "décor": "bg-pink-100 text-pink-700",
+            "decor": "bg-pink-100 text-pink-700"}
+ACCENT = {"comparing": "border-l-slate-300", "negotiating": "border-l-amber-400", "your_turn": "border-l-sky-500",
+          "agreed": "border-l-emerald-500", "closed": "border-l-slate-200"}
+templates.env.globals.update(cat_cls=lambda c: CATEGORY.get((c or "").strip().lower(), "bg-slate-100 text-slate-600"),
+                             accent=lambda k: ACCENT.get(k, "border-l-slate-200"))
 
 RATE = defaultdict(deque)
 
@@ -123,33 +130,50 @@ def dashboard(request: Request):
     wid = require_login(request)
     with get_session() as s:
         ws = s.get(Workspace, wid)
-        reqs = list(s.exec(select(SourcingRequest).where(SourcingRequest.workspace_id == wid)
-                           .order_by(SourcingRequest.id.desc())))
-        rows, saved, open_negs = [], 0, 0
-        for r in reqs:
-            qs = services.quotations(s, r.id)
-            negs = list(s.exec(select(Negotiation).where(Negotiation.request_id == r.id)))
-            open_negs += sum(1 for n in negs if n.status in ("awaiting_supplier", "awaiting_buyer"))
-            your_turn = sum(1 for n in negs if n.status == "awaiting_buyer")
-            first = services.quote_for(s, r.id, r.agreed_supplier_id) if r.agreed_supplier_id else None
-            r_saved = (first.total_paise - r.agreed_price_paise) if first and r.agreed_price_paise else 0
-            saved += max(0, r_saved)
-            low = min((q.total_paise for q in qs), default=None)
-            rows.append({"r": r, "quotes": len(qs), "lowest": low, "your_turn": your_turn, "saved": r_saved,
-                         "agreed_with": s.get(Supplier, r.agreed_supplier_id).name if r.agreed_supplier_id else None})
-        req_ids = [r.id for r in reqs]
+        rows = _request_rows(s, wid)
+        req_ids = [x["r"].id for x in rows]
         activity = []
         if req_ids:
             negs = {n.id: n for n in s.exec(select(Negotiation).where(Negotiation.request_id.in_(req_ids)))}
-            for o in s.exec(select(Offer).where(Offer.negotiation_id.in_(list(negs) or [0])).order_by(Offer.id.desc()).limit(6)):
+            for o in s.exec(select(Offer).where(Offer.negotiation_id.in_(list(negs) or [0])).order_by(Offer.id.desc()).limit(5)):
                 n = negs[o.negotiation_id]
                 activity.append({"o": o, "n": n, "supplier": s.get(Supplier, n.supplier_id).name,
                                  "request": s.get(SourcingRequest, n.request_id).title})
         scorecard = services.supplier_scorecard(s, wid)
-    stats = {"active": sum(1 for r in reqs if r.status in ("comparing", "negotiating")), "open": open_negs,
+    active = sorted([x for x in rows if x["r"].status in ("comparing", "negotiating")],
+                    key=lambda x: (0 if x["your_turn"] else 1 if x["r"].status == "comparing" else 2))
+    agreed = [x for x in rows if x["r"].status == "agreed"]
+    stats = {"active": len(active), "open": sum(x["your_turn"] + x["waiting"] for x in rows),
+             "your_turn": sum(x["your_turn"] for x in rows),
              "spend": sum(x["spend"] for x in scorecard), "saved": sum(x["saved"] for x in scorecard),
              "jobs": sum(x["jobs"] for x in scorecard)}
-    return render(request, "dashboard.html", ws=ws, rows=rows, stats=stats, activity=activity, scorecard=scorecard)
+    return render(request, "dashboard.html", ws=ws, active=active, agreed=agreed, stats=stats, activity=activity,
+                  scorecard=scorecard, agreed_total=sum(x["r"].agreed_price_paise or 0 for x in agreed))
+
+
+def _request_rows(s, wid):
+    rows = []
+    for r in s.exec(select(SourcingRequest).where(SourcingRequest.workspace_id == wid).order_by(SourcingRequest.id.desc())):
+        qs = services.quotations(s, r.id)
+        negs = list(s.exec(select(Negotiation).where(Negotiation.request_id == r.id)))
+        your_turn = sum(1 for n in negs if n.status == "awaiting_buyer")
+        first = services.quote_for(s, r.id, r.agreed_supplier_id) if r.agreed_supplier_id else None
+        rows.append({"r": r, "quotes": len(qs), "lowest": min((q.total_paise for q in qs), default=None),
+                     "your_turn": your_turn, "waiting": sum(1 for n in negs if n.status == "awaiting_supplier"),
+                     "saved": (first.total_paise - r.agreed_price_paise) if first and r.agreed_price_paise else 0,
+                     "agreed_with": s.get(Supplier, r.agreed_supplier_id).name if r.agreed_supplier_id else None,
+                     "state": "your_turn" if your_turn else r.status})
+    return rows
+
+
+@app.get("/requests", response_class=HTMLResponse)
+def all_requests(request: Request, status: str = ""):
+    wid = require_login(request)
+    with get_session() as s:
+        rows = _request_rows(s, wid)
+    if status:
+        rows = [x for x in rows if x["r"].status == status]
+    return render(request, "requests.html", rows=rows, status=status)
 
 
 @app.get("/requests/new", response_class=HTMLResponse)

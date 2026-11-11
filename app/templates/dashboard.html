@@ -1,63 +1,80 @@
 {% extends "base.html" %}
-{% from "macros.html" import badge, pill, btn %}
+{% from "macros.html" import badge, btn %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
 <div class="flex flex-wrap items-end justify-between gap-3">
  <div><p class="text-sm text-slate-500">{{ ws.name }}</p><h1 class="text-2xl font-bold text-slate-900">Sourcing dashboard</h1></div>
  <a href="/requests/new" class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">+ New request</a>
 </div>
+
 <div class="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
- {% for label, value, sub in [("Active requests", stats.active, "comparing or negotiating"), ("Open negotiations", stats.open, "waiting on you or a supplier"), ("Spend tracked", inr(stats.spend), stats.jobs ~ " supplier jobs on record"), ("Saved by negotiating", inr(stats.saved), "agreed vs first quotes")] %}
- <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4"><p class="text-xs font-medium text-slate-500">{{ label }}</p><p class="mt-1 text-2xl font-bold num {% if loop.last %}text-emerald-600{% endif %}">{{ value }}</p><p class="text-xs text-slate-400">{{ sub }}</p></div>
- {% endfor %}
+ <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4 border-t-4 border-t-amber-400"><p class="text-xs font-medium text-slate-500">In progress</p><p class="mt-1 text-2xl font-bold num">{{ stats.active }}</p><p class="text-xs text-slate-400">open sourcing requests</p></div>
+ <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4 border-t-4 border-t-sky-500"><p class="text-xs font-medium text-slate-500">Needs your reply</p><p class="mt-1 text-2xl font-bold num {{ 'text-sky-700' if stats.your_turn else '' }}">{{ stats.your_turn }}</p><p class="text-xs text-slate-400">supplier counteroffers</p></div>
+ <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4 border-t-4 border-t-slate-400"><p class="text-xs font-medium text-slate-500">Spend tracked</p><p class="mt-1 text-2xl font-bold num">{{ inr(stats.spend) }}</p><p class="text-xs text-slate-400">{{ stats.jobs }} supplier jobs on record</p></div>
+ <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4 border-t-4 border-t-emerald-500"><p class="text-xs font-medium text-slate-500">Saved by negotiating</p><p class="mt-1 text-2xl font-bold num text-emerald-600">{{ inr(stats.saved) }}</p><p class="text-xs text-slate-400">agreed vs first quotes</p></div>
 </div>
+
 <div class="mt-8 grid lg:grid-cols-3 gap-6">
- <section class="lg:col-span-2 bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
-  <h2 class="px-5 py-3 font-semibold border-b border-slate-100">Sourcing requests</h2>
-  {% for x in rows %}
-  <a href="/requests/{{ x.r.id }}" class="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-100 last:border-0 hover:bg-slate-50">
-   <div class="min-w-0">
-    <p class="font-medium text-slate-900 truncate">{{ x.r.title }}</p>
-    <p class="text-xs text-slate-500 mt-0.5">{{ x.quotes }} quote{{ '' if x.quotes == 1 else 's' }}{% if x.r.needed_by %} · needed by {{ x.r.needed_by }}{% endif %}
-     {% if x.r.created_via == 'claude' %} · {{ pill('via Claude', 'bg-violet-100 text-violet-700') }}{% endif %}
-     {% if x.r.is_sample %} {{ pill('sample data') }}{% endif %}</p>
+ <div class="lg:col-span-2 space-y-6">
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
+   <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+    <h2 class="font-semibold">In progress <span class="text-slate-400 font-normal">({{ active|length }})</span></h2>
+    <div class="hidden sm:flex items-center gap-3 text-[11px] text-slate-500">
+     <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-sm bg-sky-500"></span>your turn</span>
+     <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-sm bg-amber-400"></span>negotiating</span>
+     <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-sm bg-slate-300"></span>comparing</span>
+    </div>
    </div>
-   <div class="text-right shrink-0">
-    {{ badge(x.r.status) }}
-    {% if x.your_turn %}<p class="text-xs font-semibold text-sky-700 mt-1">{{ x.your_turn }} supplier repl{{ 'y' if x.your_turn == 1 else 'ies' }}</p>{% endif %}
-    {% if x.r.status == 'agreed' %}<p class="text-xs text-slate-500 mt-1 num">{{ inr(x.r.agreed_price_paise) }} with {{ x.agreed_with }}</p>{% elif x.lowest %}<p class="text-xs text-slate-500 mt-1 num">lowest {{ inr(x.lowest) }}</p>{% endif %}
+   <div class="divide-y divide-slate-100">
+    {% for x in active %}{% include "request_row.html" %}{% else %}<p class="px-5 py-8 text-sm text-slate-500">Nothing in progress. Ask Claude to compare some quotes.</p>{% endfor %}
    </div>
-  </a>
-  {% else %}<p class="px-5 py-8 text-sm text-slate-500">No requests yet. Ask Claude to compare some quotes, or create one.</p>{% endfor %}
- </section>
- <section class="bg-white rounded-xl ring-1 ring-slate-200">
+  </section>
+
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
+   <details>
+    <summary class="list-none cursor-pointer px-5 py-3 flex items-center justify-between hover:bg-slate-50">
+     <span class="flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span><span class="font-semibold">Agreed</span><span class="text-slate-400">({{ agreed|length }})</span>
+      <span class="text-xs text-slate-500 num hidden sm:inline">· {{ inr(agreed_total) }} contracted</span></span>
+     <span class="text-xs font-semibold text-brand-700">Show ▾</span>
+    </summary>
+    <div class="divide-y divide-slate-100 border-t border-slate-100">
+     {% for x in agreed[:3] %}{% include "request_row.html" %}{% endfor %}
+    </div>
+   </details>
+   <a href="/requests?status=agreed" class="block px-5 py-2.5 border-t border-slate-100 text-sm font-semibold text-brand-700 hover:bg-slate-50">See all agreements →</a>
+  </section>
+ </div>
+
+ <section class="bg-white rounded-xl ring-1 ring-slate-200 self-start">
   <h2 class="px-5 py-3 font-semibold border-b border-slate-100">Recent activity</h2>
   <ul class="divide-y divide-slate-100">
   {% for a in activity %}
-   <li class="px-5 py-3 text-sm"><a href="/negotiations/{{ a.n.id }}" class="hover:underline">
-    <span class="font-medium">{{ 'You' if a.o.author == 'buyer' else a.supplier }}</span>
-    {% if a.o.kind == 'accept' %}accepted <span class="num">{{ inr(a.o.price_paise) }}</span>{% elif a.o.kind == 'reject' %}rejected the offer{% else %}offered <span class="num">{{ inr(a.o.price_paise) }}</span>{% endif %}</a>
-    <p class="text-xs text-slate-400">{{ a.request }}</p></li>
+   <li class="px-5 py-3 text-sm flex gap-3"><span class="mt-1.5 h-2 w-2 shrink-0 rounded-full {{ 'bg-emerald-500' if a.o.kind == 'accept' else ('bg-brand-600' if a.o.author == 'buyer' else 'bg-amber-500') }}"></span>
+    <a href="/negotiations/{{ a.n.id }}" class="hover:underline"><span class="font-medium">{{ 'You' if a.o.author == 'buyer' else a.supplier }}</span>
+    {% if a.o.kind == 'accept' %}accepted <span class="num">{{ inr(a.o.price_paise) }}</span>{% elif a.o.kind == 'reject' %}rejected the offer{% else %}offered <span class="num">{{ inr(a.o.price_paise) }}</span>{% endif %}
+    <span class="block text-xs text-slate-400">{{ a.request }}</span></a></li>
   {% else %}<li class="px-5 py-6 text-sm text-slate-500">Nothing yet.</li>{% endfor %}
   </ul>
  </section>
 </div>
+
 <section class="mt-8 bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
  <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2"><h2 class="font-semibold">Supplier scorecard</h2><p class="text-xs text-slate-500">From your own quotes, agreements and delivery records</p></div>
  <div class="overflow-x-auto"><table class="w-full text-sm">
-  <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Jobs</th><th class="px-4 py-2 text-right">Spend</th><th class="px-4 py-2 text-right">Saved</th><th class="px-4 py-2 text-left">On time</th><th class="px-4 py-2 text-left">Rating</th><th class="px-4 py-2 text-left">Last job</th></tr></thead>
-  <tbody class="divide-y divide-slate-100">
-  {% for x in scorecard %}
+  <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Jobs</th><th class="px-4 py-2 text-right">Spend</th><th class="px-4 py-2 text-right">Saved</th><th class="px-4 py-2 text-left">On time</th><th class="px-4 py-2 text-left">Rating</th></tr></thead>
+  {% macro srow(x) %}
   <tr>
-   <td class="px-4 py-3"><a href="/suppliers/{{ x.supplier.id }}" class="font-medium hover:underline">{{ x.supplier.name }}</a><p class="text-xs text-slate-500">{{ x.supplier.category }}</p></td>
+   <td class="px-4 py-3"><a href="/suppliers/{{ x.supplier.id }}" class="font-medium hover:underline">{{ x.supplier.name }}</a> <span class="ml-1 rounded-full px-2 py-0.5 text-[11px] font-medium {{ cat_cls(x.supplier.category) }}">{{ x.supplier.category }}</span></td>
    <td class="px-4 py-3 text-right num">{{ x.jobs }}</td>
    <td class="px-4 py-3 text-right num">{{ inr(x.spend) }}</td>
-   <td class="px-4 py-3 text-right num {{ 'text-emerald-700 font-semibold' if x.saved > 0 else 'text-slate-400' }}">{{ inr(x.saved) }}{% if x.saved_pct %} <span class="text-xs font-normal">({{ x.saved_pct }}%)</span>{% endif %}</td>
-   <td class="px-4 py-3">{% if x.on_time_rate is not none %}<div class="flex items-center gap-2"><div class="h-1.5 w-16 rounded-full bg-slate-100"><div class="h-1.5 rounded-full {{ 'bg-rose-500' if x.on_time_rate < 70 else ('bg-amber-400' if x.on_time_rate < 90 else 'bg-emerald-500') }}" style="width: {{ x.on_time_rate|int }}%"></div></div><span class="text-xs num {{ 'text-rose-600 font-semibold' if x.on_time_rate < 70 else '' }}">{{ x.on_time_rate|int }}%</span></div>{% if x.late %}<p class="text-[11px] text-rose-600">{{ x.late }} late</p>{% endif %}{% else %}<span class="text-xs text-slate-400">—</span>{% endif %}</td>
+   <td class="px-4 py-3 text-right num {{ 'text-emerald-700 font-semibold' if x.saved > 0 else 'text-slate-400' }}">{{ inr(x.saved) }}</td>
+   <td class="px-4 py-3">{% if x.on_time_rate is not none %}<div class="flex items-center gap-2"><div class="h-1.5 w-16 rounded-full bg-slate-100"><div class="h-1.5 rounded-full {{ 'bg-rose-500' if x.on_time_rate < 70 else ('bg-amber-400' if x.on_time_rate < 90 else 'bg-emerald-500') }}" style="width: {{ x.on_time_rate|int }}%"></div></div><span class="text-xs num {{ 'text-rose-600 font-semibold' if x.on_time_rate < 70 else '' }}">{{ x.on_time_rate|int }}%{% if x.late %} · {{ x.late }} late{% endif %}</span></div>{% else %}<span class="text-xs text-slate-400">—</span>{% endif %}</td>
    <td class="px-4 py-3 text-xs">{{ ('★ ' ~ x.avg_rating) if x.avg_rating else '—' }}</td>
-   <td class="px-4 py-3 text-xs text-slate-500">{{ x.last }}</td>
   </tr>
-  {% else %}<tr><td colspan="7" class="px-4 py-6 text-slate-500">Supplier records build up as you close deals.</td></tr>{% endfor %}
-  </tbody></table></div>
+  {% endmacro %}
+  <tbody class="divide-y divide-slate-100">{% for x in scorecard[:4] %}{{ srow(x) }}{% else %}<tr><td colspan="6" class="px-4 py-6 text-slate-500">Supplier records build up as you close deals.</td></tr>{% endfor %}</tbody>
+  {% if scorecard|length > 4 %}<tbody id="more-sup" class="hidden divide-y divide-slate-100 border-t border-slate-100">{% for x in scorecard[4:] %}{{ srow(x) }}{% endfor %}</tbody>{% endif %}
+ </table></div>
+ {% if scorecard|length > 4 %}<button onclick="var t=document.getElementById('more-sup');t.classList.toggle('hidden');this.textContent=t.classList.contains('hidden')?'See all {{ scorecard|length }} suppliers ▾':'Show fewer ▴'" class="w-full px-5 py-2.5 border-t border-slate-100 text-left text-sm font-semibold text-brand-700 hover:bg-slate-50">See all {{ scorecard|length }} suppliers ▾</button>{% endif %}
 </section>
 {% endblock %}
