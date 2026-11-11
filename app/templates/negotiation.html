@@ -95,10 +95,24 @@
   </section>
   {% endif %}
 
+  {% if n.status in ('draft', 'awaiting_supplier') %}
+  <details class="bg-white rounded-xl ring-1 ring-slate-200 p-5" {{ 'open' if n.status == 'awaiting_supplier' else '' }}>
+   <summary class="cursor-pointer font-semibold">Supplier replied on WhatsApp or by phone? Log it here</summary>
+   <p class="mt-1 text-xs text-slate-500">Or paste their message into Claude: <em>"{{ sup.name }} replied: …, log it in QuoteLoop."</em></p>
+   <form method="post" action="/negotiations/{{ n.id }}/log-reply" class="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
+    <label class="block font-medium">Their price, all-inclusive (₹)<input name="price_inr" type="number" step="1" min="1" required class="mt-1 {{ input() }}"></label>
+    <label class="block font-medium">Delivery<input name="delivery" class="mt-1 {{ input() }}"></label>
+    <label class="block font-medium">Received via<select name="via" class="mt-1 {{ input() }}"><option>WhatsApp</option><option>phone</option><option>email</option></select></label>
+    <label class="sm:col-span-3 block font-medium">Their message<textarea name="message" rows="2" class="mt-1 {{ input() }}"></textarea></label>
+    <button class="sm:col-span-3 justify-self-start {{ btn('bg-slate-900 text-white hover:bg-slate-700') }}">Log supplier reply</button>
+   </form>
+  </details>
+  {% endif %}
+
   {% if n.status in ('awaiting_supplier', 'awaiting_buyer', 'agreed') %}
   <section class="bg-white rounded-xl ring-1 ring-slate-200 p-5">
    <h2 class="font-semibold">Supplier's private link</h2>
-   <p class="text-xs text-slate-500">{{ sup.name }} sees only their own quote and this negotiation. No account or Claude needed.</p>
+   <p class="text-xs text-slate-500">Optional: {{ sup.name }} can accept or counter in one tap and gets a written record of the agreed price and terms. They see only their own quote, with no account and no Claude. If they reply on WhatsApp instead, log it above.</p>
    <div class="mt-3 flex items-center gap-2"><input readonly value="{{ link }}" id="lnk" class="{{ input() }} text-xs font-mono"><button onclick="navigator.clipboard.writeText(document.getElementById('lnk').value);this.textContent='Copied'" class="{{ btn('ring-1 ring-slate-300 hover:bg-slate-50') }}">Copy</button></div>
    <div class="mt-3 flex flex-wrap gap-2 text-sm">
     <a href="{{ wa }}" target="_blank" class="{{ btn('bg-[#25D366] text-white hover:opacity-90') }}">Share on WhatsApp</a>

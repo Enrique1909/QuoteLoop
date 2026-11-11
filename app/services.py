@@ -431,3 +431,57 @@ def negotiation_levers(s: Session, req: SourcingRequest, sup: Supplier) -> dict:
     order = {"strong": 0, "medium": 1, "light": 2}
     levers.sort(key=lambda l: order[l["strength"]])
     return {"levers": levers, "target_paise": target_paise, "target_basis": basis, "quote_paise": q.total_paise}
+
+
+# ---------- housekeeping ----------
+def _delete_negotiation(s: Session, n: Negotiation) -> None:
+    for d in s.exec(select(NegotiationDraft).where(NegotiationDraft.negotiation_id == n.id)):
+        s.delete(d)
+    for o in s.exec(select(Offer).where(Offer.negotiation_id == n.id)):
+        s.delete(o)
+    s.flush()
+    s.delete(n)
+
+
+def delete_request(s: Session, req: SourcingRequest) -> None:
+    """Remove a sourcing request with its quotes, negotiations and the supplier record it produced."""
+    for n in s.exec(select(Negotiation).where(Negotiation.request_id == req.id)):
+        _delete_negotiation(s, n)
+    for q in s.exec(select(Quotation).where(Quotation.request_id == req.id)):
+        s.delete(q)
+    for e in s.exec(select(Engagement).where(Engagement.request_id == req.id)):
+        s.delete(e)
+    s.flush()
+    s.delete(req)
+    s.commit()
+
+
+def remove_supplier(s: Session, req: SourcingRequest, sid: int) -> None:
+    """Take a supplier off a request: their quote, negotiation and private link are removed."""
+    if req.agreed_supplier_id == sid:
+        raise InvalidState("You can't remove the supplier this request was agreed with.")
+    for n in s.exec(select(Negotiation).where(Negotiation.request_id == req.id, Negotiation.supplier_id == sid)):
+        _delete_negotiation(s, n)
+    for q in s.exec(select(Quotation).where(Quotation.request_id == req.id, Quotation.supplier_id == sid)):
+        s.delete(q)
+    s.flush()
+    if req.status == "negotiating" and not s.exec(select(Negotiation).where(Negotiation.request_id == req.id)).first():
+        req.status = "comparing"
+        s.add(req)
+    s.commit()
+
+
+def log_supplier_reply(s: Session, n: Negotiation, *, price_paise: int, delivery: str = "", message: str = "",
+                       via: str = "WhatsApp") -> Offer:
+    """Record a counteroffer the supplier sent outside QuoteLoop (WhatsApp, phone, email)."""
+    req = s.get(SourcingRequest, n.request_id)
+    if req.status == "agreed" or n.status not in ("draft", "awaiting_supplier"):
+        raise InvalidState("A supplier reply can be logged only while you're waiting on them (or before you've sent anything).")
+    if price_paise <= 0:
+        raise InvalidState("Enter the price the supplier quoted.")
+    o = Offer(negotiation_id=n.id, author="supplier", price_paise=price_paise, delivery_commitment=delivery.strip(),
+              message=message.strip(), author_name=f"Logged from {via}")
+    s.add(o)
+    req.status = "negotiating"
+    _touch(s, n, "awaiting_buyer", req)
+    return o

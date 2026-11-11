@@ -48,8 +48,8 @@ templates.env.globals.update(inr=format_inr, status=lambda k: STATUS.get(k, (k, 
 CATEGORY = {"av equipment": "bg-violet-100 text-violet-700", "printing": "bg-sky-100 text-sky-700",
             "catering": "bg-orange-100 text-orange-700", "décor": "bg-pink-100 text-pink-700",
             "decor": "bg-pink-100 text-pink-700"}
-ACCENT = {"comparing": "border-l-slate-300", "negotiating": "border-l-amber-400", "your_turn": "border-l-sky-500",
-          "agreed": "border-l-emerald-500", "closed": "border-l-slate-200"}
+ACCENT = {"action": "border-l-sky-500", "waiting": "border-l-amber-400", "agreed": "border-l-emerald-500",
+          "closed": "border-l-slate-200"}
 templates.env.globals.update(cat_cls=lambda c: CATEGORY.get((c or "").strip().lower(), "bg-slate-100 text-slate-600"),
                              accent=lambda k: ACCENT.get(k, "border-l-slate-200"))
 
@@ -141,10 +141,10 @@ def dashboard(request: Request):
                                  "request": s.get(SourcingRequest, n.request_id).title})
         scorecard = services.supplier_scorecard(s, wid)
     active = sorted([x for x in rows if x["r"].status in ("comparing", "negotiating")],
-                    key=lambda x: (0 if x["your_turn"] else 1 if x["r"].status == "comparing" else 2))
+                    key=lambda x: (0 if x["state"] == "action" else 1, -x["r"].id))
     agreed = [x for x in rows if x["r"].status == "agreed"]
     stats = {"active": len(active), "open": sum(x["your_turn"] + x["waiting"] for x in rows),
-             "your_turn": sum(x["your_turn"] for x in rows),
+             "your_turn": sum(1 for x in rows if x["state"] == "action"),
              "spend": sum(x["spend"] for x in scorecard), "saved": sum(x["saved"] for x in scorecard),
              "jobs": sum(x["jobs"] for x in scorecard)}
     return render(request, "dashboard.html", ws=ws, active=active, agreed=agreed, stats=stats, activity=activity,
@@ -162,7 +162,9 @@ def _request_rows(s, wid):
                      "your_turn": your_turn, "waiting": sum(1 for n in negs if n.status == "awaiting_supplier"),
                      "saved": (first.total_paise - r.agreed_price_paise) if first and r.agreed_price_paise else 0,
                      "agreed_with": s.get(Supplier, r.agreed_supplier_id).name if r.agreed_supplier_id else None,
-                     "state": "your_turn" if your_turn else r.status})
+                     "state": ("agreed" if r.status == "agreed" else "closed" if r.status == "closed"
+                               else "action" if your_turn or not any(n.status == "awaiting_supplier" for n in negs)
+                               else "waiting")})
     return rows
 
 
@@ -271,6 +273,40 @@ def edit_quote(request: Request, qid: int, base_inr: str = Form("0"), delivery_i
         s.add(q)
         s.commit()
         return RedirectResponse(f"/requests/{r.id}?saved=1", status_code=303)
+
+
+@app.post("/requests/{rid}/delete")
+def delete_request(request: Request, rid: int):
+    wid = require_login(request)
+    with get_session() as s:
+        services.delete_request(s, services.get_request(s, wid, rid))
+    return RedirectResponse("/dashboard", status_code=303)
+
+
+@app.post("/requests/{rid}/suppliers/{sid}/remove")
+def remove_supplier(request: Request, rid: int, sid: int):
+    wid = require_login(request)
+    with get_session() as s:
+        r = services.get_request(s, wid, rid)
+        try:
+            services.remove_supplier(s, r, sid)
+        except services.InvalidState:
+            pass
+    return RedirectResponse(f"/requests/{rid}", status_code=303)
+
+
+@app.post("/negotiations/{nid}/log-reply")
+def log_reply(request: Request, nid: int, price_inr: str = Form(...), delivery: str = Form(""), message: str = Form(""),
+              via: str = Form("WhatsApp")):
+    wid = require_login(request)
+    with get_session() as s:
+        n = services.get_negotiation(s, wid, nid)
+        try:
+            services.log_supplier_reply(s, n, price_paise=inr_to_paise(price_inr or 0), delivery=delivery, message=message,
+                                        via=via if via in ("WhatsApp", "phone", "email") else "WhatsApp")
+        except services.InvalidState as e:
+            return RedirectResponse(f"/negotiations/{nid}?error={urlquote(str(e))}", status_code=303)
+    return RedirectResponse(f"/negotiations/{nid}", status_code=303)
 
 
 @app.post("/requests/{rid}/negotiate/{sid}")

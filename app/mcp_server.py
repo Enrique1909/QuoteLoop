@@ -173,6 +173,27 @@ def save_negotiation_draft(ctx: Context, request_id: int, supplier_id: int, prop
 
 
 @mcp.tool()
+def record_supplier_reply(ctx: Context, request_id: int, supplier_id: int, price_inr: float, message: str = "",
+                          delivery_commitment: str = "", via: str = "WhatsApp") -> dict:
+    """Log a supplier's counteroffer that arrived outside QuoteLoop (e.g. a WhatsApp message the user pasted).
+
+    price_inr is the all-inclusive total in rupees the supplier offered; message is their text, quoted as-is.
+    """
+    wid = _workspace_id(ctx)
+    with get_session() as s:
+        try:
+            req = services.get_request(s, wid, request_id)
+            services.get_supplier(s, wid, supplier_id)
+            n = services.get_or_create_negotiation(s, req, supplier_id)
+            services.log_supplier_reply(s, n, price_paise=inr_to_paise(price_inr), delivery=delivery_commitment,
+                                        message=message, via=via if via in ("WhatsApp", "phone", "email") else "WhatsApp")
+        except (services.NotFound, services.InvalidState) as e:
+            raise ToolError(str(e))
+        return {"logged": True, "supplier_offer": format_inr(inr_to_paise(price_inr)), "status": "your move",
+                "review_url": f"{_base_url(ctx)}/negotiations/{n.id}"}
+
+
+@mcp.tool()
 def list_sourcing_requests(ctx: Context) -> list[dict]:
     """List sourcing requests with status, number of quotes, and agreed price where agreed."""
     wid = _workspace_id(ctx)

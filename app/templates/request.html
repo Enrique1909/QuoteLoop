@@ -10,6 +10,9 @@
   <p class="mt-1 text-sm text-slate-600 max-w-3xl">{{ r.specifications }}</p>
   <p class="mt-1 text-xs text-slate-500">Requested: <strong>{{ r.quantity }} {{ r.unit }}</strong>{% if r.category %} · {{ r.category }}{% endif %}{% if r.needed_by %} · needed by {{ r.needed_by }}{% endif %}</p>
  </div>
+ <form method="post" action="/requests/{{ r.id }}/delete" onsubmit="return confirm('Delete this request, its quotes and negotiation history? This cannot be undone.')">
+  <button class="{{ btn('text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50') }}">Delete request</button>
+ </form>
 </div>
 
 {% if request.query_params.get('saved') %}<div class="mt-5 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 text-sm text-emerald-900">Quote updated. Totals recalculated.</div>{% endif %}
@@ -74,6 +77,7 @@
     {% if r.status != 'agreed' %}<a href="/quotes/{{ q.id }}/edit" class="{{ btn('text-slate-600 hover:bg-slate-100') }}">Edit</a>{% endif %}
     {% if x.negotiation %}<a href="/negotiations/{{ x.negotiation.id }}" class="{{ btn('bg-slate-900 text-white hover:bg-slate-700') }}">{{ status(x.negotiation.status)[0] }}</a>
     {% elif r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/negotiate/{{ x.supplier.id }}" class="inline"><button class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Negotiate</button></form>{% endif %}
+    {% if r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/suppliers/{{ x.supplier.id }}/remove" class="mt-1" onsubmit="return confirm('Remove {{ x.supplier.name }} from this request? Their quote, negotiation and private link will be removed.')"><button class="text-xs text-slate-400 hover:text-rose-600">Remove supplier</button></form>{% endif %}
    </td>
   </tr>
   {% else %}<tr><td colspan="8" class="px-5 py-8 text-slate-500">No quotes yet.</td></tr>{% endfor %}

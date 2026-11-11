@@ -23,6 +23,7 @@ For small event agencies that buy AV, printing, catering and décor from the sam
 | `create_sourcing_comparison` | Save a sourcing request and the extracted quotations (editable by the buyer; totals calculated by the app) |
 | `get_negotiation_context` | Current quote, other quotes (buyer-side only), history with the supplier, negotiation timeline |
 | `save_negotiation_draft` | Store a suggested counteroffer with reasoning and the history it relied on, for buyer review |
+| `record_supplier_reply` | Log a counteroffer the supplier sent on WhatsApp, phone or email (e.g. a pasted message) |
 | `list_sourcing_requests` | Status of all requests |
 
 ## Run locally
@@ -37,3 +38,4 @@ SQLite by default; set `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (dire
 - Supplier links are long random tokens scoped to one negotiation and revoked when another supplier wins; no supplier accounts.
 - Acceptance is a commercial record, not a legal e-signature. No payments, purchase orders, or WhatsApp/email sending.
 - Supplier performance can be recorded after an agreement; richer analytics are roadmap.
+- Suppliers can use the private link or reply on WhatsApp; WhatsApp replies are logged by the buyer (or their Claude). Automatic WhatsApp ingestion via the WhatsApp Business Platform is roadmap.
