@@ -145,9 +145,11 @@ def dashboard(request: Request):
                 n = negs[o.negotiation_id]
                 activity.append({"o": o, "n": n, "supplier": s.get(Supplier, n.supplier_id).name,
                                  "request": s.get(SourcingRequest, n.request_id).title})
+        scorecard = services.supplier_scorecard(s, wid)
     stats = {"active": sum(1 for r in reqs if r.status in ("comparing", "negotiating")), "open": open_negs,
-             "agreed": sum(1 for r in reqs if r.status == "agreed"), "saved": saved}
-    return render(request, "dashboard.html", ws=ws, rows=rows, stats=stats, activity=activity)
+             "spend": sum(x["spend"] for x in scorecard), "saved": sum(x["saved"] for x in scorecard),
+             "jobs": sum(x["jobs"] for x in scorecard)}
+    return render(request, "dashboard.html", ws=ws, rows=rows, stats=stats, activity=activity, scorecard=scorecard)
 
 
 @app.get("/requests/new", response_class=HTMLResponse)
@@ -187,8 +189,7 @@ def request_page(request: Request, rid: int):
                       "saved": first.total_paise - r.agreed_price_paise if first else 0,
                       "saved_pct": pct(first.total_paise - r.agreed_price_paise, first.total_paise) if first else None,
                       "engagement": eng}
-        return render(request, "request.html", r=r, rows=rows, agreed=agreed,
-                      unverified=sum(1 for x in rows if not x["q"].verified))
+        return render(request, "request.html", r=r, rows=rows, agreed=agreed)
 
 
 @app.post("/requests/{rid}/quotes")

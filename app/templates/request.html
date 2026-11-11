@@ -12,10 +12,7 @@
  </div>
 </div>
 
-{% if unverified and r.status != 'agreed' %}
-<div class="mt-5 rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 text-sm text-amber-900">⚠️ {{ unverified }} quote{{ '' if unverified == 1 else 's' }} extracted by Claude and not yet checked. Use <strong>Edit</strong> to verify the amounts against the original quote.</div>
-{% endif %}
-{% if request.query_params.get('saved') %}<div class="mt-5 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 text-sm text-emerald-900">Quote saved and marked verified. Totals recalculated.</div>{% endif %}
+{% if request.query_params.get('saved') %}<div class="mt-5 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 text-sm text-emerald-900">Quote updated. Totals recalculated.</div>{% endif %}
 
 {% if agreed %}
 <section class="mt-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-white ring-1 ring-emerald-200 p-6">
@@ -54,7 +51,7 @@
   <tr class="align-top {% if agreed and agreed.supplier.id == x.supplier.id %}bg-emerald-50/50{% endif %}">
    <td class="px-4 py-4 min-w-[200px]">
     <a href="/suppliers/{{ x.supplier.id }}" class="font-semibold text-slate-900 hover:underline">{{ x.supplier.name }}</a>
-    <div class="mt-1 flex flex-wrap gap-1">{% if not q.verified %}{{ pill('unverified', 'bg-amber-100 text-amber-800') }}{% endif %}{% if x.get('cheapest') %}{{ pill('lowest comparable', 'bg-emerald-100 text-emerald-800') }}{% endif %}{% if x.get('fastest') %}{{ pill('fastest', 'bg-sky-100 text-sky-800') }}{% endif %}</div>
+    <div class="mt-1 flex flex-wrap gap-1">{% if x.get('cheapest') %}{{ pill('lowest comparable', 'bg-emerald-100 text-emerald-800') }}{% endif %}{% if x.get('fastest') %}{{ pill('fastest', 'bg-sky-100 text-sky-800') }}{% endif %}</div>
     {% if q.scope %}<p class="mt-1 text-xs text-slate-500">Includes: {{ q.scope }}</p>{% endif %}
     {% if q.exclusions %}<p class="text-xs text-slate-500">Excludes: {{ q.exclusions }}</p>{% endif %}
     {% for f in x.flags %}<p class="mt-1 text-xs text-amber-700">⚠ {{ f }}</p>{% endfor %}

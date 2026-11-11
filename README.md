@@ -20,7 +20,7 @@ For small event agencies that buy AV, printing, catering and décor from the sam
 ## MCP tools
 | Tool | Purpose |
 |---|---|
-| `create_sourcing_comparison` | Save a sourcing request and the extracted quotations (marked unverified until the buyer checks them) |
+| `create_sourcing_comparison` | Save a sourcing request and the extracted quotations (editable by the buyer; totals calculated by the app) |
 | `get_negotiation_context` | Current quote, other quotes (buyer-side only), history with the supplier, negotiation timeline |
 | `save_negotiation_draft` | Store a suggested counteroffer with reasoning and the history it relied on, for buyer review |
 | `list_sourcing_requests` | Status of all requests |

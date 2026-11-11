@@ -73,7 +73,7 @@ def create_sourcing_comparison(ctx: Context, title: str, specifications: str, qu
                                needed_by: str = "") -> dict:
     """Create a sourcing request with supplier quotations so the buyer can compare them in QuoteLoop.
 
-    needed_by is YYYY-MM-DD. Amounts are saved as 'unverified' until the buyer checks them.
+    needed_by is YYYY-MM-DD. The buyer can review and edit every value in QuoteLoop.
     QuoteLoop calculates totals and flags quotes that are not comparable.
     """
     wid = _workspace_id(ctx)
@@ -96,7 +96,7 @@ def create_sourcing_comparison(ctx: Context, title: str, specifications: str, qu
         s.commit()
         out = services.request_dict(s, req)
         out["app_url"] = f"{_base_url(ctx)}/requests/{req.id}"
-        out["note"] = "Amounts are marked unverified until the buyer checks them in QuoteLoop."
+        out["note"] = "The buyer can review and edit any value in QuoteLoop; totals are recalculated by the app."
         return out
 
 

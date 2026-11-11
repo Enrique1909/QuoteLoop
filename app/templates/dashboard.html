@@ -7,7 +7,7 @@
  <a href="/requests/new" class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">+ New request</a>
 </div>
 <div class="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-4">
- {% for label, value, sub in [("Active requests", stats.active, "comparing or negotiating"), ("Open negotiations", stats.open, "with suppliers"), ("Agreements", stats.agreed, "closed deals"), ("Saved vs first quotes", inr(stats.saved), "on agreed deals")] %}
+ {% for label, value, sub in [("Active requests", stats.active, "comparing or negotiating"), ("Open negotiations", stats.open, "waiting on you or a supplier"), ("Spend tracked", inr(stats.spend), stats.jobs ~ " supplier jobs on record"), ("Saved by negotiating", inr(stats.saved), "agreed vs first quotes")] %}
  <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4"><p class="text-xs font-medium text-slate-500">{{ label }}</p><p class="mt-1 text-2xl font-bold num {% if loop.last %}text-emerald-600{% endif %}">{{ value }}</p><p class="text-xs text-slate-400">{{ sub }}</p></div>
  {% endfor %}
 </div>
@@ -42,4 +42,22 @@
   </ul>
  </section>
 </div>
+<section class="mt-8 bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
+ <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2"><h2 class="font-semibold">Supplier scorecard</h2><p class="text-xs text-slate-500">From your own quotes, agreements and delivery records</p></div>
+ <div class="overflow-x-auto"><table class="w-full text-sm">
+  <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Jobs</th><th class="px-4 py-2 text-right">Spend</th><th class="px-4 py-2 text-right">Saved</th><th class="px-4 py-2 text-left">On time</th><th class="px-4 py-2 text-left">Rating</th><th class="px-4 py-2 text-left">Last job</th></tr></thead>
+  <tbody class="divide-y divide-slate-100">
+  {% for x in scorecard %}
+  <tr>
+   <td class="px-4 py-3"><a href="/suppliers/{{ x.supplier.id }}" class="font-medium hover:underline">{{ x.supplier.name }}</a><p class="text-xs text-slate-500">{{ x.supplier.category }}</p></td>
+   <td class="px-4 py-3 text-right num">{{ x.jobs }}</td>
+   <td class="px-4 py-3 text-right num">{{ inr(x.spend) }}</td>
+   <td class="px-4 py-3 text-right num {{ 'text-emerald-700 font-semibold' if x.saved > 0 else 'text-slate-400' }}">{{ inr(x.saved) }}{% if x.saved_pct %} <span class="text-xs font-normal">({{ x.saved_pct }}%)</span>{% endif %}</td>
+   <td class="px-4 py-3">{% if x.on_time_rate is not none %}<div class="flex items-center gap-2"><div class="h-1.5 w-16 rounded-full bg-slate-100"><div class="h-1.5 rounded-full {{ 'bg-rose-500' if x.on_time_rate < 70 else ('bg-amber-400' if x.on_time_rate < 90 else 'bg-emerald-500') }}" style="width: {{ x.on_time_rate|int }}%"></div></div><span class="text-xs num {{ 'text-rose-600 font-semibold' if x.on_time_rate < 70 else '' }}">{{ x.on_time_rate|int }}%</span></div>{% if x.late %}<p class="text-[11px] text-rose-600">{{ x.late }} late</p>{% endif %}{% else %}<span class="text-xs text-slate-400">—</span>{% endif %}</td>
+   <td class="px-4 py-3 text-xs">{{ ('★ ' ~ x.avg_rating) if x.avg_rating else '—' }}</td>
+   <td class="px-4 py-3 text-xs text-slate-500">{{ x.last }}</td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="px-4 py-6 text-slate-500">Supplier records build up as you close deals.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
 {% endblock %}

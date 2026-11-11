@@ -282,7 +282,7 @@ def quote_dict(req, q: Quotation, sup: Supplier) -> dict:
             "delivery": format_inr(q.delivery_paise), "tax": format_inr(q.tax_paise), "total": format_inr(q.total_paise),
             "quantity": q.quantity, "unit": q.unit, "lead_time_days": q.lead_time_days,
             "payment_terms": q.payment_terms, "scope": q.scope, "exclusions": q.exclusions,
-            "verified_by_buyer": q.verified, "flags": quote_flags(req, q)}
+            "flags": quote_flags(req, q)}
 
 
 def request_dict(s: Session, req: SourcingRequest) -> dict:
@@ -300,3 +300,26 @@ def offer_dict(o: Offer) -> dict:
     return {"author": o.author, "type": o.kind, "price": format_inr(o.price_paise) if o.price_paise else None,
             "delivery_commitment": o.delivery_commitment or None, "terms": o.terms or None,
             "message": o.message or None, "at": iso(o.created_at)}
+
+
+def supplier_scorecard(s: Session, wid: int) -> list[dict]:
+    """Per-supplier totals from recorded engagements: spend, savings, reliability. Pure arithmetic."""
+    out = []
+    for sup in s.exec(select(Supplier).where(Supplier.workspace_id == wid)):
+        rows = list(s.exec(select(Engagement).where(Engagement.supplier_id == sup.id)))
+        if not rows:
+            continue
+        recorded = [e for e in rows if e.on_time is not None]
+        rated = [e.rating for e in rows if e.rating]
+        spend = sum(e.agreed_paise for e in rows)
+        quoted = sum(e.quoted_paise for e in rows)
+        out.append({
+            "supplier": sup, "jobs": len(rows), "spend": spend, "saved": quoted - spend,
+            "saved_pct": pct(quoted - spend, quoted) if quoted else None,
+            "on_time_rate": pct(sum(1 for e in recorded if e.on_time), len(recorded)) if recorded else None,
+            "late": sum(1 for e in recorded if e.on_time is False),
+            "issues": sum(1 for e in recorded if e.on_time is False or e.price_honored is False or e.scope_honored is False),
+            "avg_rating": round(sum(rated) / len(rated), 1) if rated else None,
+            "last": max(e.date for e in rows),
+        })
+    return sorted(out, key=lambda x: x["spend"], reverse=True)
