@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - run: curl -fsS --max-time 90 "${{ vars.APP_URL || 'https://clientroom.onrender.com' }}/health" || true
+      - run: curl -fsS --max-time 90 "${{ vars.APP_URL || 'https://quoteloop-33ut.onrender.com' }}/health" || true
