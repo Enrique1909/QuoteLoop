@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}ClientRoom{% endblock %}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.min.css">
+<style>
+ :root{--pico-font-size:15px}
+ .badge{display:inline-block;padding:.1rem .5rem;border-radius:999px;font-size:.75rem;font-weight:600;white-space:nowrap}
+ .s-draft{background:#eef0f3;color:#444}.s-sent,.s-pending{background:#fff4d6;color:#7a5600}
+ .s-revision_requested,.s-declined{background:#fde2e1;color:#8a1c1c}.s-approved{background:#dff5e3;color:#1d6b2f}
+ .sample{background:#ece7ff;color:#4b2fb3}.claude{background:#e7f1ff;color:#174ea6}
+ .muted{color:#6b7280;font-size:.85rem}.total{font-size:1.6rem;font-weight:700}
+ nav.top{border-bottom:1px solid #e5e7eb;margin-bottom:1.5rem}
+ .grid-stats article{margin:0;text-align:center} .grid-stats .total{display:block}
+ code.url{word-break:break-all}
+ table td,table th{vertical-align:top}
+</style>
+</head>
+<body>
+{% block nav %}{% endblock %}
+<main class="container">{% block body %}{% endblock %}</main>
+<footer class="container muted" style="padding:2rem 0">ClientRoom · no AI runs inside this app — the agency's own Claude connects via MCP. {% block footer %}{% endblock %}</footer>
+</body></html>

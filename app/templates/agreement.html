@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block nav %}{% include "agency_nav.html" %}{% endblock %}
+{% block body %}
+<hgroup>
+ <h2>{{ a.project_title }}</h2>
+ <p>{{ a.client_name }} · <span class="badge s-{{ a.status }}">{{ status_label(a.status) }}</span>
+ {% if a.is_sample %}<span class="badge sample">sample data</span>{% endif %}
+ {% if a.created_via == 'claude' %}<span class="badge claude">created via Claude</span>{% endif %}</p>
+</hgroup>
+
+<div class="grid">
+ <article>
+  <p class="muted">Approved total</p><span class="total">{{ inr(total) }}</span>
+  <p class="muted">Base {{ inr(a.base_price_paise) }}{% if total != a.base_price_paise %} + approved changes{% endif %}</p>
+ </article>
+ <article>
+  <p class="muted">Final deadline</p><span class="total">{{ deadline.strftime('%d %b %Y') if deadline else '—' }}</span>
+  <p class="muted">Last milestone + approved extra days</p>
+ </article>
+</div>
+
+<article>
+ {% if a.status == 'draft' %}
+  <p><strong>Draft.</strong> Review the scope, then send it — this activates the client's review link.</p>
+  <div role="group"><a href="/agreements/{{ a.id }}/edit" role="button" class="secondary">Edit</a>
+  <form method="post" action="/agreements/{{ a.id }}/send" style="margin:0"><button type="submit">Send to client</button></form></div>
+ {% else %}
+  <p><strong>Client review link</strong> (no login needed):</p>
+  <p><code class="url">{{ client_url }}</code> <a href="{{ client_url }}" target="_blank">open ↗</a></p>
+  <a href="/agreements/{{ a.id }}/edit" role="button" class="outline secondary">Edit scope (creates a new version)</a>
+ {% endif %}
+</article>
+
+<div class="grid">
+ <article><h4>Deliverables</h4><ul>{% for d in a.deliverables %}<li>{{ d }}</li>{% endfor %}</ul>
+  <p>Revision rounds included: <strong>{{ a.revision_limit }}</strong></p></article>
+ <article><h4>Not included</h4><ul>{% for e in a.exclusions %}<li>{{ e }}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul>
+  <h4>Milestones</h4><ul>{% for m in a.milestones %}<li>{{ m.name }}{% if m.due_date %} — {{ m.due_date }}{% endif %}</li>{% else %}<li class="muted">—</li>{% endfor %}</ul></article>
+</div>
+{% if a.summary %}<p>{{ a.summary }}</p>{% endif %}
+
+<h3>Change requests</h3>
+{% if crs %}
+<table><thead><tr><th>Change</th><th>Extra</th><th>Days</th><th>Status</th></tr></thead><tbody>
+{% for c in crs %}<tr><td>{{ c.description }}{% if c.created_via == 'claude' %} <span class="badge claude">via Claude</span>{% endif %}</td>
+<td>{{ inr(c.extra_price_paise) }}</td><td>+{{ c.extra_days }}</td>
+<td><span class="badge s-{{ c.status }}">{{ status_label(c.status) }}</span>{% if c.responded_by_name %}<br><span class="muted">{{ c.responded_by_name }}</span>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="muted">None yet.</p>{% endif %}
+{% if a.status == 'approved' %}
+<details><summary>Add a change request</summary>
+<form method="post" action="/agreements/{{ a.id }}/change-requests">
+ <label>What's changing<input name="description" required></label>
+ <div class="grid"><label>Extra price (₹)<input name="extra_price_inr" type="number" min="0" value="0"></label>
+ <label>Extra days<input name="extra_days" type="number" min="0" value="0"></label></div>
+ <button type="submit">Send to client for approval</button>
+</form></details>
+{% else %}<p class="muted">Change requests open once the client approves the agreement.</p>{% endif %}
+
+<h3>Version history</h3>
+{% if versions %}
+<table><thead><tr><th>Version</th><th>Sent</th><th>Client response</th></tr></thead><tbody>
+{% for v in versions|reverse %}<tr><td>v{{ v.version_no }} · {{ inr(v.snapshot.base_price_paise) }}</td>
+<td>{{ v.sent_at.strftime('%d %b %Y, %H:%M') }} UTC</td>
+<td><span class="badge s-{{ v.status }}">{{ status_label(v.status) }}</span>
+{% if v.responded_by_name %}<br>{{ v.responded_by_name }} · {{ v.responded_at.strftime('%d %b %Y, %H:%M') }} UTC{% endif %}
+{% if v.client_comment %}<br><em>“{{ v.client_comment }}”</em>{% endif %}</td></tr>{% endfor %}
+</tbody></table>
+{% else %}<p class="muted">Not sent yet.</p>{% endif %}
+{% endblock %}

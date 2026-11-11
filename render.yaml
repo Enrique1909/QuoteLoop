@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: clientroom
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DATABASE_URL
+        sync: false
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true

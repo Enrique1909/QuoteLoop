@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block nav %}{% include "agency_nav.html" %}{% endblock %}
+{% block body %}
+<h2>{{ 'Edit agreement' if a else 'New agreement' }}</h2>
+{% if a and a.status != 'draft' %}<p class="muted">Saving changes moves this agreement back to Draft; send it again so the client reviews the new version.</p>{% endif %}
+<form method="post" action="{{ '/agreements/%d/edit' % a.id if a else '/agreements/new' }}">
+ <div class="grid">
+  <label>Client name<input name="client_name" required value="{{ a.client_name if a else '' }}"></label>
+  <label>Client email<input name="client_email" type="email" value="{{ a.client_email if a else '' }}"></label>
+ </div>
+ <label>Project title<input name="project_title" required value="{{ a.project_title if a else '' }}"></label>
+ <label>Summary<textarea name="summary" rows="2">{{ a.summary if a else '' }}</textarea></label>
+ <div class="grid">
+  <label>Deliverables (one per line)<textarea name="deliverables" rows="6">{{ (a.deliverables if a else [])|join('\n') }}</textarea></label>
+  <label>Exclusions (one per line)<textarea name="exclusions" rows="6">{{ (a.exclusions if a else [])|join('\n') }}</textarea></label>
+ </div>
+ <label>Milestones (one per line: <code>Name | YYYY-MM-DD</code>)
+ <textarea name="milestones" rows="4">{% if a %}{% for m in a.milestones %}{{ m.name }} | {{ m.due_date }}
+{% endfor %}{% endif %}</textarea></label>
+ <div class="grid">
+  <label>Price (₹)<input name="price_inr" type="number" min="0" step="1" value="{{ (a.base_price_paise // 100) if a else '' }}" required></label>
+  <label>Revision rounds included<input name="revision_limit" type="number" min="0" value="{{ a.revision_limit if a else 2 }}"></label>
+ </div>
+ <button type="submit">Save</button>
+</form>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block nav %}{% include "agency_nav.html" %}{% endblock %}
+{% block body %}
+<h2>{{ ws.name }} · Agreements</h2>
+<div class="grid grid-stats">
+ <article><span class="total">{{ totals.awaiting }}</span><span class="muted">awaiting client</span></article>
+ <article><span class="total">{{ totals.approved }}</span><span class="muted">approved</span></article>
+ <article><span class="total">{{ totals.pending_crs }}</span><span class="muted">change requests pending</span></article>
+</div>
+<br>
+{% if rows %}
+<table>
+<thead><tr><th>Client</th><th>Project</th><th>Status</th><th>Approved total</th><th>Change requests</th></tr></thead>
+<tbody>
+{% for r in rows %}
+<tr>
+ <td><a href="/agreements/{{ r.id }}">{{ r.client }}</a>
+   {% if r.sample_data %}<span class="badge sample">sample data</span>{% endif %}
+   {% if r.created_via == 'claude' %}<span class="badge claude">via Claude</span>{% endif %}</td>
+ <td>{{ r.project }}</td>
+ <td><span class="badge s-{{ r.status }}">{{ status_label(r.status) }}</span></td>
+ <td>{{ r.approved_total if r.status == 'approved' else '—' }}</td>
+ <td>{% if r.pending_change_requests %}<span class="badge s-pending">{{ r.pending_change_requests }} pending</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+{% else %}<p>No agreements yet. <a href="/agreements/new">Create one</a> or ask Claude.</p>{% endif %}
+{% endblock %}
