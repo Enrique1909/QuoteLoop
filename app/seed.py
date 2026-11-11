@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from sqlmodel import select
 
 from app import services
-from app.auth import hash_password
+from app.auth import check_password, hash_password
 from app.db import get_session
 from app.models import Workspace
 from app.money import inr_to_paise
@@ -16,6 +16,14 @@ DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "volopay-demo")
 
 def seed() -> None:
     with get_session() as s:
+        existing = s.exec(select(Workspace).where(Workspace.login_email == DEMO_EMAIL)).first()
+        if existing:
+            # Keep the demo login in sync with the DEMO_PASSWORD set on the host.
+            if os.environ.get("DEMO_PASSWORD") and not check_password(DEMO_PASSWORD, existing.password_hash):
+                existing.password_hash = hash_password(DEMO_PASSWORD)
+                s.add(existing)
+                s.commit()
+            return
         if s.exec(select(Workspace)).first():
             return
         ws = Workspace(name="Demo Studio", login_email=DEMO_EMAIL, password_hash=hash_password(DEMO_PASSWORD))
