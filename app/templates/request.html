@@ -1,27 +1,27 @@
 {% extends "base.html" %}
-{% from "macros.html" import badge, pill, btn, input %}
+{% from "macros.html" import badge, pill, btn, input, icon, stars %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
-<a href="/dashboard" class="text-sm text-slate-500 hover:underline">← Dashboard</a>
+<a href="/dashboard" class="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800">{{ icon('arrow-left', 'h-3.5 w-3.5') }}Dashboard</a>
 <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
  <div>
-  <div class="flex items-center gap-2 flex-wrap"><h1 class="text-2xl font-bold text-slate-900">{{ r.title }}</h1>{{ badge(r.status) }}
-   {% if r.created_via == 'claude' %}{{ pill('created via Claude', 'bg-violet-100 text-violet-700') }}{% endif %}{% if r.is_sample %}{{ pill('sample data') }}{% endif %}</div>
+  <div class="flex items-center gap-2 flex-wrap"><h1 class="text-xl font-semibold tracking-tight text-slate-900">{{ r.title }}</h1>{{ badge(r.status) }}
+   {% if r.created_via == 'claude' %}<span class="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">{{ icon('sparkle', 'h-3 w-3') }}created via Claude</span>{% endif %}{% if r.is_sample %}{{ pill('sample data') }}{% endif %}</div>
   <p class="mt-1 text-sm text-slate-600 max-w-3xl">{{ r.specifications }}</p>
   <p class="mt-1 text-xs text-slate-500">Requested: <strong>{{ r.quantity }} {{ r.unit }}</strong>{% if r.category %} · {{ r.category }}{% endif %}{% if r.needed_by %} · needed by {{ r.needed_by }}{% endif %}</p>
  </div>
  <form method="post" action="/requests/{{ r.id }}/delete" onsubmit="return confirm('Delete this request, its quotes and negotiation history? This cannot be undone.')">
-  <button class="{{ btn('text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50') }}">Delete request</button>
+  <button class="{{ btn('text-rose-700 border border-rose-200 hover:bg-rose-50') }}">Delete request</button>
  </form>
 </div>
 
-{% if request.query_params.get('saved') %}<div class="mt-5 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 text-sm text-emerald-900">Quote updated. Totals recalculated.</div>{% endif %}
+{% if request.query_params.get('saved') %}<div class="mt-5 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-900">Quote updated. Totals recalculated.</div>{% endif %}
 
 {% if agreed %}
-<section class="mt-6 rounded-2xl bg-gradient-to-br from-emerald-50 to-white ring-1 ring-emerald-200 p-6">
+<section class="mt-6 rounded-lg bg-white border border-emerald-200 p-6">
  <p class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Agreed</p>
  <div class="mt-1 flex flex-wrap items-end gap-x-8 gap-y-2">
-  <p class="text-3xl font-bold num">{{ inr(r.agreed_price_paise) }}</p>
+  <p class="text-3xl font-semibold tracking-tight num">{{ inr(r.agreed_price_paise) }}</p>
   <p class="text-sm">with <a href="/suppliers/{{ agreed.supplier.id }}" class="font-semibold hover:underline">{{ agreed.supplier.name }}</a></p>
   {% if agreed.first and agreed.saved > 0 %}<p class="text-sm font-semibold text-emerald-700 num">Saved {{ inr(agreed.saved) }} ({{ agreed.saved_pct }}%) vs their first quote of {{ inr(agreed.first.total_paise) }}</p>{% endif %}
  </div>
@@ -29,7 +29,7 @@
  {% if agreed.engagement %}
   {% set e = agreed.engagement %}
   {% if e.on_time is none %}
-  <details class="mt-4"><summary class="cursor-pointer text-sm font-semibold text-brand-700">After the event: record how the supplier performed →</summary>
+  <details class="mt-4"><summary class="cursor-pointer text-sm font-semibold text-brand-700"><span class="inline-flex items-center gap-1">After the event: record how the supplier performed{{ icon('chevron-down', 'h-3.5 w-3.5') }}</span></summary>
   <form method="post" action="/engagements/{{ e.id }}/outcome" class="mt-3 grid sm:grid-cols-5 gap-3 text-sm">
    <input type="hidden" name="back" value="/requests/{{ r.id }}">
    {% for f, l in [('on_time','Delivered on time?'),('price_honored','Price honoured?'),('scope_honored','Full scope delivered?')] %}
@@ -43,7 +43,7 @@
 </section>
 {% endif %}
 
-<section class="mt-6 bg-white rounded-2xl ring-1 ring-slate-200 overflow-hidden">
+<section class="mt-6 bg-white rounded-lg border border-slate-200 overflow-hidden">
  <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between"><h2 class="font-semibold">Supplier comparison</h2><p class="text-xs text-slate-500">Totals = base + delivery + tax, calculated by QuoteLoop</p></div>
  <div class="overflow-x-auto">
  <table class="w-full text-sm">
@@ -54,10 +54,10 @@
   <tr class="align-top {% if agreed and agreed.supplier.id == x.supplier.id %}bg-emerald-50/50{% endif %}">
    <td class="px-4 py-4 min-w-[200px]">
     <a href="/suppliers/{{ x.supplier.id }}" class="font-semibold text-slate-900 hover:underline">{{ x.supplier.name }}</a>
-    <div class="mt-1 flex flex-wrap gap-1">{% if x.get('cheapest') %}{{ pill('lowest comparable', 'bg-emerald-100 text-emerald-800') }}{% endif %}{% if x.get('fastest') %}{{ pill('fastest', 'bg-sky-100 text-sky-800') }}{% endif %}</div>
+    <div class="mt-1 flex flex-wrap gap-1">{% if x.get('cheapest') %}{{ pill('lowest comparable', 'bg-emerald-100 text-emerald-800') }}{% endif %}{% if x.get('fastest') %}{{ pill('fastest', 'bg-brand-100 text-brand-800') }}{% endif %}</div>
     {% if q.scope %}<p class="mt-1 text-xs text-slate-500">Includes: {{ q.scope }}</p>{% endif %}
     {% if q.exclusions %}<p class="text-xs text-slate-500">Excludes: {{ q.exclusions }}</p>{% endif %}
-    {% for f in x.flags %}<p class="mt-1 text-xs text-amber-700">⚠ {{ f }}</p>{% endfor %}
+    {% for f in x.flags %}<p class="mt-1 flex items-start gap-1 text-xs text-amber-700">{{ icon('alert', 'h-3.5 w-3.5 mt-px') }}{{ f }}</p>{% endfor %}
    </td>
    <td class="px-4 py-4 text-right num">{{ inr(q.base_paise) }}</td>
    <td class="px-4 py-4 text-right num">{{ inr(q.delivery_paise) if q.delivery_paise else 'incl.' }}</td>
@@ -66,12 +66,21 @@
    <td class="px-4 py-4"><p>{{ (q.lead_time_days ~ ' days') if q.lead_time_days is not none else '—' }}</p><p class="text-xs text-slate-500">{{ q.payment_terms or 'terms not stated' }}</p></td>
    <td class="px-4 py-4 min-w-[190px]">
     {% if h.engagements %}
-     <p class="text-xs"><strong>{{ h.engagements }}</strong> past job{{ '' if h.engagements == 1 else 's' }}{% if h.avg_rating %} · ★ {{ h.avg_rating }}{% endif %}</p>
+     <p class="text-xs"><strong>{{ h.engagements }}</strong> past job{{ '' if h.engagements == 1 else 's' }}{% if h.avg_rating %} · {{ stars(h.avg_rating) }}{% endif %}</p>
      {% if h.on_time_rate is not none %}<p class="text-xs {{ 'text-rose-600 font-semibold' if h.on_time_rate < 70 else 'text-emerald-700' }}">On time {{ h.on_time_rate|int }}%{% if h.late_count %} · {{ h.late_count }} late{% endif %}</p>{% endif %}
      {% if h.avg_discount_pct %}<p class="text-xs text-slate-600">Usually agrees {{ h.avg_discount_pct }}% below quote</p>{% endif %}
      {% if h.issues %}<p class="text-xs text-slate-500 italic mt-0.5">“{{ h.issues[0] }}”</p>{% endif %}
     {% else %}<p class="text-xs text-slate-400">New supplier</p>{% endif %}
-    {% if x.levers.levers and r.status != 'agreed' %}<p class="mt-1 text-xs font-semibold text-violet-700">💡 {{ x.levers.levers|length }} negotiation lever{{ '' if x.levers.levers|length == 1 else 's' }}{% if x.levers.target_paise %} · open at {{ inr(x.levers.target_paise) }}{% endif %}</p>{% endif %}
+{% set LICON = {'discount_history': 'trending-down', 'late_delivery': 'clock', 'scope_issue': 'alert', 'competitor_price': 'list', 'payment_terms': 'info', 'delivery_charge': 'send', 'price_increase': 'trending-down', 'price_reference': 'info', 'loyalty': 'star'} %}
+    {% if x.levers.levers and r.status != 'agreed' %}
+    <div class="mt-2 rounded-md border border-slate-200 bg-slate-50/70 p-2">
+     <p class="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{{ icon('lightbulb', 'h-3 w-3 text-amber-500') }}Levers{% if x.levers.target_paise %}<span class="ml-auto normal-case tracking-normal text-[11px] font-medium text-slate-700 num">open at {{ inr(x.levers.target_paise) }}</span>{% endif %}</p>
+     <ul class="mt-1 space-y-0.5">
+      {% for l in x.levers.levers[:2] %}<li class="flex items-start gap-1.5 text-[11px] leading-snug {{ 'text-rose-700' if l.strength == 'strong' else 'text-slate-600' }}">{{ icon(LICON.get(l.type, 'info'), 'h-3 w-3 mt-px') }}<span>{{ l.title }}</span></li>{% endfor %}
+     </ul>
+     {% if x.levers.levers|length > 2 %}<p class="mt-0.5 text-[11px] text-slate-400">+{{ x.levers.levers|length - 2 }} more in negotiation</p>{% endif %}
+    </div>
+    {% endif %}
    </td>
    <td class="px-4 py-4 text-right whitespace-nowrap">
     {% if r.status != 'agreed' %}<a href="/quotes/{{ q.id }}/edit" class="{{ btn('text-slate-600 hover:bg-slate-100') }}">Edit</a>{% endif %}
@@ -86,7 +95,7 @@
 </section>
 
 {% if r.status != 'agreed' %}
-<details class="mt-4 bg-white rounded-xl ring-1 ring-slate-200 p-5"><summary class="cursor-pointer font-semibold text-sm">+ Add a quote manually</summary>
+<details class="mt-4 bg-white rounded-lg border border-slate-200 p-5"><summary class="cursor-pointer font-semibold text-sm">+ Add a quote manually</summary>
 <form method="post" action="/requests/{{ r.id }}/quotes" class="mt-4 grid sm:grid-cols-4 gap-3 text-sm">
  <label class="sm:col-span-2 block">Supplier name<input name="supplier_name" required class="mt-1 {{ input() }}"></label>
  <label class="block">Lead time (days)<input name="lead_time_days" type="number" class="mt-1 {{ input() }}"></label>

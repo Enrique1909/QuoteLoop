@@ -1,16 +1,16 @@
 {% extends "base.html" %}
-{% from "macros.html" import pill %}
+{% from "macros.html" import pill, icon, stars, badge, btn %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
-<a href="/dashboard" class="text-sm text-slate-500 hover:underline">← Dashboard</a>
-<h1 class="mt-2 text-2xl font-bold">{{ sup.name }} {% if sup.is_sample %}{{ pill('sample data') }}{% endif %}</h1>
+<a href="/dashboard" class="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800">{{ icon('arrow-left', 'h-3.5 w-3.5') }}Dashboard</a>
+<h1 class="mt-2 text-xl font-semibold tracking-tight">{{ sup.name }} {% if sup.is_sample %}{{ pill('sample data') }}{% endif %}</h1>
 <p class="text-sm text-slate-500">{{ sup.category }}{% if sup.contact %} · {{ sup.contact }}{% endif %}</p>
 <div class="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-4">
- {% for l, v in [('Past jobs', hist.engagements), ('On time', (hist.on_time_rate|int ~ '%') if hist.on_time_rate is not none else '—'), ('Avg rating', hist.avg_rating or '—'), ('Avg below quote', (hist.avg_discount_pct ~ '%') if hist.avg_discount_pct else '—')] %}
- <div class="bg-white rounded-xl ring-1 ring-slate-200 p-4"><p class="text-xs text-slate-500">{{ l }}</p><p class="text-2xl font-bold">{{ v }}</p></div>{% endfor %}
+ {% for l, v in [('Past jobs', hist.engagements), ('On time', (hist.on_time_rate|int ~ '%') if hist.on_time_rate is not none else '—'), ('Avg rating', (hist.avg_rating ~ ' / 5') if hist.avg_rating else '—'), ('Avg below quote', (hist.avg_discount_pct ~ '%') if hist.avg_discount_pct else '—')] %}
+ <div class="bg-white rounded-lg border border-slate-200 p-4"><p class="text-xs text-slate-500">{{ l }}</p><p class="text-xl font-semibold tracking-tight">{{ v }}</p></div>{% endfor %}
 </div>
-<section class="mt-6 bg-white rounded-xl ring-1 ring-slate-200 overflow-x-auto">
+<section class="mt-6 bg-white rounded-lg border border-slate-200 overflow-x-auto">
  <table class="w-full text-sm"><thead class="bg-slate-50 text-xs uppercase text-slate-500"><tr><th class="px-4 py-2 text-left">Date</th><th class="px-4 py-2 text-left">Job</th><th class="px-4 py-2 text-right">Quoted</th><th class="px-4 py-2 text-right">Agreed</th><th class="px-4 py-2 text-left">Delivery</th><th class="px-4 py-2 text-left">Notes</th></tr></thead>
- <tbody class="divide-y divide-slate-100">{% for e in hist.rows %}<tr class="align-top"><td class="px-4 py-3 whitespace-nowrap">{{ e.date }}</td><td class="px-4 py-3"><p class="font-medium">{{ e.item }}</p><p class="text-xs text-slate-500">{{ e.specifications }} · {{ e.quantity }} {{ e.unit }}</p></td><td class="px-4 py-3 text-right num">{{ inr(e.quoted_paise) }}</td><td class="px-4 py-3 text-right num font-semibold">{{ inr(e.agreed_paise) }}</td><td class="px-4 py-3">{% if e.on_time is none %}<span class="text-slate-400">not recorded</span>{% else %}{{ 'On time' if e.on_time else 'Late' }}{% if e.rating %} · ★{{ e.rating }}{% endif %}{% endif %}</td><td class="px-4 py-3 text-xs text-slate-600">{{ e.notes }}</td></tr>{% else %}<tr><td colspan="6" class="px-4 py-6 text-slate-500">No history yet.</td></tr>{% endfor %}</tbody></table>
+ <tbody class="divide-y divide-slate-100">{% for e in hist.rows %}<tr class="align-top"><td class="px-4 py-3 whitespace-nowrap">{{ e.date }}</td><td class="px-4 py-3"><p class="font-medium">{{ e.item }}</p><p class="text-xs text-slate-500">{{ e.specifications }} · {{ e.quantity }} {{ e.unit }}</p></td><td class="px-4 py-3 text-right num">{{ inr(e.quoted_paise) }}</td><td class="px-4 py-3 text-right num font-semibold">{{ inr(e.agreed_paise) }}</td><td class="px-4 py-3">{% if e.on_time is none %}<span class="text-slate-400">not recorded</span>{% else %}{{ 'On time' if e.on_time else 'Late' }}{% if e.rating %} · {{ stars(e.rating) }}{% endif %}{% endif %}</td><td class="px-4 py-3 text-xs text-slate-600">{{ e.notes }}</td></tr>{% else %}<tr><td colspan="6" class="px-4 py-6 text-slate-500">No history yet.</td></tr>{% endfor %}</tbody></table>
 </section>
 {% endblock %}

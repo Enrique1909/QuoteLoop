@@ -35,22 +35,22 @@ app.mount("/mcp", WorkspaceKeyRouter())
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 STATUS = {
-    "comparing": ("Comparing quotes", "bg-slate-100 text-slate-700"),
-    "negotiating": ("Negotiating", "bg-amber-100 text-amber-800"),
-    "agreed": ("Agreed", "bg-emerald-100 text-emerald-800"),
-    "closed": ("Closed", "bg-slate-100 text-slate-500"),
-    "draft": ("Not sent yet", "bg-slate-100 text-slate-700"),
-    "awaiting_supplier": ("Waiting for supplier", "bg-amber-100 text-amber-800"),
-    "awaiting_buyer": ("Supplier replied: your turn", "bg-sky-100 text-sky-800"),
-    "rejected": ("Rejected", "bg-rose-100 text-rose-700"),
+    "comparing": ("Comparing quotes", "bg-slate-50 text-slate-700 border-slate-200"),
+    "negotiating": ("Negotiating", "bg-amber-50 text-amber-800 border-amber-200"),
+    "agreed": ("Agreed", "bg-emerald-50 text-emerald-800 border-emerald-200"),
+    "closed": ("Closed", "bg-slate-50 text-slate-500 border-slate-200"),
+    "draft": ("Not sent yet", "bg-slate-50 text-slate-700 border-slate-200"),
+    "awaiting_supplier": ("Waiting on supplier", "bg-amber-50 text-amber-800 border-amber-200"),
+    "awaiting_buyer": ("Supplier replied: your move", "bg-brand-50 text-brand-700 border-brand-100"),
+    "rejected": ("Rejected", "bg-rose-50 text-rose-700 border-rose-200"),
 }
 templates.env.globals.update(inr=format_inr, status=lambda k: STATUS.get(k, (k, "bg-slate-100 text-slate-700")))
-CATEGORY = {"av equipment": "bg-violet-100 text-violet-700", "printing": "bg-sky-100 text-sky-700",
-            "catering": "bg-orange-100 text-orange-700", "décor": "bg-pink-100 text-pink-700",
-            "decor": "bg-pink-100 text-pink-700"}
-ACCENT = {"action": "border-l-sky-500", "waiting": "border-l-amber-400", "agreed": "border-l-emerald-500",
+CATEGORY = {"av equipment": "bg-indigo-50 text-indigo-700 border-indigo-200", "printing": "bg-cyan-50 text-cyan-700 border-cyan-200",
+            "catering": "bg-orange-50 text-orange-700 border-orange-200", "décor": "bg-rose-50 text-rose-700 border-rose-200",
+            "decor": "bg-rose-50 text-rose-700 border-rose-200"}
+ACCENT = {"action": "border-l-brand-600", "waiting": "border-l-amber-400", "agreed": "border-l-emerald-500",
           "closed": "border-l-slate-200"}
-templates.env.globals.update(cat_cls=lambda c: CATEGORY.get((c or "").strip().lower(), "bg-slate-100 text-slate-600"),
+templates.env.globals.update(cat_cls=lambda c: CATEGORY.get((c or "").strip().lower(), "bg-slate-50 text-slate-600 border-slate-200"),
                              accent=lambda k: ACCENT.get(k, "border-l-slate-200"))
 
 RATE = defaultdict(deque)

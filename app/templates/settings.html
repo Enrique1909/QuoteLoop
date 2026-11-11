@@ -1,12 +1,13 @@
 {% extends "base.html" %}
+{% from "macros.html" import icon, stars, pill, badge, btn %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
-<h1 class="text-2xl font-bold">Connect your Claude</h1>
-<div class="mt-5 bg-white rounded-xl ring-1 ring-slate-200 p-6 max-w-3xl">
+<h1 class="text-xl font-semibold tracking-tight">Connect your Claude</h1>
+<div class="mt-5 bg-white rounded-lg border border-slate-200 p-6 max-w-3xl">
  <p class="text-sm font-medium">Your workspace's MCP URL <span class="text-slate-500 font-normal">(private: it gives Claude access to this workspace)</span></p>
- <div class="mt-2 flex gap-2"><input readonly id="u" value="{{ mcp_url }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono"><button onclick="navigator.clipboard.writeText(document.getElementById('u').value);this.textContent='Copied'" class="rounded-lg px-3 py-2 text-sm font-semibold ring-1 ring-slate-300">Copy</button></div>
+ <div class="mt-2 flex gap-2"><input readonly id="u" value="{{ mcp_url }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-xs font-mono"><button onclick="navigator.clipboard.writeText(document.getElementById('u').value);this.textContent='Copied'" class="rounded-lg px-3 py-2 text-sm font-semibold border border-slate-300">Copy</button></div>
  <ol class="mt-5 list-decimal ml-5 space-y-2 text-sm text-slate-700">
-  <li>In Claude open <strong>Settings → Connectors → Add custom connector</strong>.</li>
+  <li>In Claude open <strong>Settings › Connectors › Add custom connector</strong>.</li>
   <li>Name it <em>QuoteLoop</em> and paste the URL. No other sign-in needed.</li>
   <li>In a chat, attach your supplier quotes and ask: <em>"Compare these quotes in QuoteLoop."</em> Then: <em>"Use my history with SoundWave to suggest a counteroffer and save it as a draft."</em></li>
  </ol>

@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% from "macros.html" import input, btn %}
+{% from "macros.html" import input, btn, icon, stars, pill, badge %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
-<h1 class="text-2xl font-bold">New sourcing request</h1>
+<h1 class="text-xl font-semibold tracking-tight">New sourcing request</h1>
 <p class="text-sm text-slate-500 mt-1">Tip: you can also attach quotes in Claude and ask it to create the comparison.</p>
-<form method="post" action="/requests/new" class="mt-6 bg-white rounded-xl ring-1 ring-slate-200 p-6 space-y-4 max-w-2xl">
+<form method="post" action="/requests/new" class="mt-6 bg-white rounded-lg border border-slate-200 p-6 space-y-4 max-w-2xl">
  <label class="block text-sm font-medium">Title<input name="title" required class="mt-1 {{ input() }}" placeholder="AV for TechSummit 2026"></label>
  <label class="block text-sm font-medium">Specifications<textarea name="specifications" rows="3" class="mt-1 {{ input() }}"></textarea></label>
  <div class="grid sm:grid-cols-4 gap-4">

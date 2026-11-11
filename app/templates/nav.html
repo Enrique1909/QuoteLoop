@@ -1,11 +1,12 @@
-<header class="bg-white border-b border-slate-200">
- <div class="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-  <a href="/dashboard" class="flex items-center gap-2 font-bold text-slate-900"><span class="grid place-items-center h-7 w-7 rounded-lg bg-brand-600 text-white text-xs">QL</span>QuoteLoop</a>
-  <nav class="flex items-center gap-1 text-sm">
-   <a href="/dashboard" class="px-3 py-1.5 rounded-md hover:bg-slate-100">Dashboard</a>
-   <a href="/requests/new" class="px-3 py-1.5 rounded-md hover:bg-slate-100 hidden sm:inline">New request</a>
-   <a href="/settings" class="px-3 py-1.5 rounded-md hover:bg-slate-100">Connect Claude</a>
-   <form method="post" action="/logout"><button class="px-3 py-1.5 rounded-md text-slate-500 hover:bg-slate-100">Log out</button></form>
+{% from "macros.html" import icon %}
+<header class="bg-slate-900 text-slate-300">
+ <div class="max-w-6xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between">
+  <a href="/dashboard" class="flex items-center gap-2 font-semibold text-white tracking-tight"><span class="grid place-items-center h-6 w-6 rounded bg-brand-600 text-[10px] font-bold text-white">QL</span>QuoteLoop</a>
+  <nav class="flex items-center gap-0.5 text-[13px]">
+   <a href="/dashboard" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-slate-800 hover:text-white">{{ icon('grid', 'h-3.5 w-3.5') }}Dashboard</a>
+   <a href="/requests" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-slate-800 hover:text-white">{{ icon('list', 'h-3.5 w-3.5') }}Requests</a>
+   <a href="/settings" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-slate-800 hover:text-white">{{ icon('plug', 'h-3.5 w-3.5') }}Connect Claude</a>
+   <form method="post" action="/logout"><button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-slate-400 hover:bg-slate-800 hover:text-white">{{ icon('logout', 'h-3.5 w-3.5') }}<span class="hidden sm:inline">Log out</span></button></form>
   </nav>
  </div>
 </header>

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% from "macros.html" import input, btn %}
+{% from "macros.html" import input, btn, icon, stars, pill, badge %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
-<a href="/requests/{{ r.id }}" class="text-sm text-slate-500 hover:underline">← {{ r.title }}</a>
-<h1 class="mt-2 text-2xl font-bold">Edit quote: {{ supplier.name }}</h1>
+<a href="/requests/{{ r.id }}" class="inline-flex items-center gap-1 text-[13px] text-slate-500 hover:text-slate-800">{{ icon('arrow-left', 'h-3.5 w-3.5') }}{{ r.title }}</a>
+<h1 class="mt-2 text-xl font-semibold tracking-tight">Edit quote: {{ supplier.name }}</h1>
 <p class="text-sm text-slate-500">Correct anything that doesn't match the supplier's quote. QuoteLoop recalculates the total when you save.</p>
-<form method="post" action="/quotes/{{ q.id }}/edit" class="mt-6 bg-white rounded-xl ring-1 ring-slate-200 p-6 grid sm:grid-cols-3 gap-4 max-w-3xl text-sm">
+<form method="post" action="/quotes/{{ q.id }}/edit" class="mt-6 bg-white rounded-lg border border-slate-200 p-6 grid sm:grid-cols-3 gap-4 max-w-3xl text-sm">
  <label class="block font-medium">Base (₹)<input name="base_inr" type="number" step="0.01" value="{{ q.base_paise / 100 }}" class="mt-1 {{ input() }}"></label>
  <label class="block font-medium">Delivery (₹)<input name="delivery_inr" type="number" step="0.01" value="{{ q.delivery_paise / 100 }}" class="mt-1 {{ input() }}"></label>
  <label class="block font-medium">Tax (₹)<input name="tax_inr" type="number" step="0.01" value="{{ q.tax_paise / 100 }}" class="mt-1 {{ input() }}"></label>
