@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: clientroom
+    name: quoteloop
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
