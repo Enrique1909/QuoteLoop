@@ -1,0 +1,12 @@
+{# breadcrumb: expects r (request); optional leaf #}
+{% from "macros.html" import icon %}
+{% set list_href = '/requests?status=agreed' if r.status == 'agreed' else ('/requests?status=' ~ r.status) %}
+{% set list_label = 'Agreements' if r.status == 'agreed' else ('Negotiating' if r.status == 'negotiating' else 'Comparing') %}
+<nav class="flex flex-wrap items-center gap-1 text-[13px] text-slate-500">
+ <a href="/dashboard" class="hover:text-slate-800">Dashboard</a>
+ <span class="text-slate-300">/</span>
+ <a href="{{ list_href }}" class="hover:text-slate-800">{{ list_label }}</a>
+ <span class="text-slate-300">/</span>
+ {% if leaf %}<a href="/requests/{{ r.id }}" class="hover:text-slate-800 truncate max-w-[18rem]">{{ r.title }}</a><span class="text-slate-300">/</span><span class="text-slate-700">{{ leaf }}</span>
+ {% else %}<span class="text-slate-700 truncate max-w-[22rem]">{{ r.title }}</span>{% endif %}
+</nav>
