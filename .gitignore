@@ -2,3 +2,6 @@
 __pycache__/
 *.db
 .env
+.neon
+node_modules/
+.env.local
