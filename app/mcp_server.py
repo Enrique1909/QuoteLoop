@@ -18,6 +18,10 @@ from app.models import Quotation, SourcingRequest, Workspace
 from app.money import format_inr, inr_to_paise
 
 KEY_HEADER = "x-quoteloop-workspace-key"
+# Core product = compare quotes, use your own supplier history, negotiate. Extra Claude actions
+# (drafting, logging replies, award memos, spend reviews) stay in the code but are off unless QL_EXTRAS=1.
+EXTRAS = os.environ.get("QL_EXTRAS") == "1"
+
 
 mcp = MCPServer(
     name="QuoteLoop",
@@ -34,6 +38,10 @@ mcp = MCPServer(
         "Always give the user the links returned by the tools."
     ),
 )
+
+
+def _extra(fn):
+    return mcp.tool()(fn) if EXTRAS else fn
 
 
 class QuoteIn(BaseModel):
@@ -81,22 +89,40 @@ def create_sourcing_comparison(ctx: Context, title: str, specifications: str, qu
     wid = _workspace_id(ctx)
     if not quotations:
         raise ToolError("Add at least one quotation.")
+    if len(quotations) > 15:
+        raise ToolError("Please compare at most 15 quotations at a time.")
+    if not (title or "").strip():
+        raise ToolError("Give the sourcing request a short title.")
+    for qi in quotations:
+        if not (qi.supplier_name or "").strip():
+            raise ToolError("Every quotation needs a supplier name.")
+        for label, v in (("base price", qi.base_price_inr), ("delivery charge", qi.delivery_charge_inr), ("tax", qi.tax_inr)):
+            if v is not None and (v < 0 or v > 1_000_000_000):
+                raise ToolError(f"{qi.supplier_name}: {label} must be between 0 and ₹100 crore.")
     with get_session() as s:
-        req = SourcingRequest(workspace_id=wid, title=title.strip(), category=category.strip(),
-                              specifications=specifications.strip(), quantity=max(1, int(quantity)),
-                              unit=unit.strip() or "unit", needed_by=needed_by.strip(), created_via="claude")
+        req = SourcingRequest(workspace_id=wid, title=title.strip()[:200], category=category.strip()[:60],
+                              specifications=specifications.strip()[:2000], quantity=max(1, min(int(quantity or 1), 10_000_000)),
+                              unit=(unit or "").strip()[:40] or "unit", needed_by=(needed_by or "").strip()[:20], created_via="claude")
         s.add(req)
         s.commit()
         s.refresh(req)
+        seen, skipped = set(), []
         for qi in quotations:
-            sup = services.get_or_create_supplier(s, wid, qi.supplier_name, qi.supplier_contact, category)
+            sup = services.get_or_create_supplier(s, wid, qi.supplier_name.strip()[:120], (qi.supplier_contact or "")[:120], category[:60])
+            if sup.id in seen:
+                skipped.append(sup.name)
+                continue
+            seen.add(sup.id)
+            lead = qi.lead_time_days if qi.lead_time_days is not None and 0 <= qi.lead_time_days <= 365 else None
             s.add(Quotation(request_id=req.id, supplier_id=sup.id, base_paise=inr_to_paise(qi.base_price_inr),
                             delivery_paise=inr_to_paise(qi.delivery_charge_inr), tax_paise=inr_to_paise(qi.tax_inr),
-                            quantity=qi.quantity or req.quantity, unit=(qi.unit or req.unit),
-                            lead_time_days=qi.lead_time_days, payment_terms=qi.payment_terms, scope=qi.scope,
-                            exclusions=qi.exclusions, verified=False, created_via="claude"))
+                            quantity=max(1, min(qi.quantity or req.quantity, 10_000_000)), unit=(qi.unit or req.unit)[:40],
+                            lead_time_days=lead, payment_terms=(qi.payment_terms or "")[:200], scope=(qi.scope or "")[:1000],
+                            exclusions=(qi.exclusions or "")[:1000], verified=False, created_via="claude"))
         s.commit()
         out = services.request_dict(s, req)
+        if skipped:
+            out["skipped_duplicates"] = f"Only the first quote per supplier is kept; skipped extra quotes from: {', '.join(skipped)}"
         out["app_url"] = f"{_base_url(ctx)}/requests/{req.id}"
         out["note"] = "The buyer can review and edit any value in QuoteLoop; totals are recalculated by the app."
         return out
@@ -147,7 +173,7 @@ def get_negotiation_context(ctx: Context, request_id: int, supplier_id: int) -> 
         }
 
 
-@mcp.tool()
+@_extra
 def save_negotiation_draft(ctx: Context, request_id: int, supplier_id: int, proposed_price_inr: float, message: str,
                            reasoning: str, delivery_commitment: str = "", terms: str = "",
                            references: list[str] = []) -> dict:
@@ -174,7 +200,7 @@ def save_negotiation_draft(ctx: Context, request_id: int, supplier_id: int, prop
                 "review_url": f"{_base_url(ctx)}/negotiations/{n.id}"}
 
 
-@mcp.tool()
+@_extra
 def record_supplier_reply(ctx: Context, request_id: int, supplier_id: int, price_inr: float, message: str = "",
                           delivery_commitment: str = "", via: str = "WhatsApp") -> dict:
     """Log a supplier's counteroffer that arrived outside QuoteLoop (e.g. a WhatsApp message the user pasted).
@@ -205,7 +231,7 @@ class ReviewAction(BaseModel):
     impact: str = Field(default="", description="Expected effect, using numbers from QuoteLoop where possible")
 
 
-@mcp.tool()
+@_extra
 def get_sourcing_overview(ctx: Context, request_id: int) -> dict:
     """Everything needed to decide which supplier to award on one request: every quote with totals and
     comparability flags, the buyer's history with each supplier, and QuoteLoop's rule-based levers."""
@@ -220,7 +246,7 @@ def get_sourcing_overview(ctx: Context, request_id: int) -> dict:
         return out
 
 
-@mcp.tool()
+@_extra
 def save_award_recommendation(ctx: Context, request_id: int, recommended_supplier_id: int, headline: str,
                               rationale: str, risks: list[RecommendationRisk] = [],
                               fallback_supplier_id: Optional[int] = None, fallback_note: str = "",
@@ -256,7 +282,7 @@ def save_award_recommendation(ctx: Context, request_id: int, recommended_supplie
                 "note": "Share the approver link with a manager or client; they can approve or ask for changes without an account."}
 
 
-@mcp.tool()
+@_extra
 def get_spend_overview(ctx: Context) -> dict:
     """Spend, savings and reliability for every supplier and category on record, plus open requests.
     Use it to answer questions like 'where are we overspending?' or to write a supplier review."""
@@ -267,7 +293,7 @@ def get_spend_overview(ctx: Context) -> dict:
         return out
 
 
-@mcp.tool()
+@_extra
 def save_supplier_review(ctx: Context, title: str, summary: str, recommendations: list[ReviewAction]) -> dict:
     """Save a supplier/spend review you wrote from get_spend_overview, so the team can read it in QuoteLoop.
     summary: 3-5 sentences with figures. recommendations: concrete actions, most valuable first."""

@@ -43,7 +43,7 @@
 </section>
 {% endif %}
 
-{% if rec %}{% set rc = rec.rec %}
+{% if extras and rec %}{% set rc = rec.rec %}
 <section class="mt-6 rounded-lg border border-violet-200 bg-white overflow-hidden">
  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-2.5">
   <span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-800">{{ icon('sparkle', 'h-3.5 w-3.5') }}Award recommendation from your Claude</span>
@@ -71,7 +71,7 @@
   </div>
  </div>
 </section>
-{% elif r.status != 'agreed' and rows|length > 1 %}
+{% elif extras and r.status != 'agreed' and rows|length > 1 %}
 <div class="mt-6 flex items-start gap-2 rounded-lg border border-dashed border-violet-200 bg-white px-4 py-3 text-[13px] text-slate-600">{{ icon('sparkle', 'h-4 w-4 text-violet-600 mt-0.5') }}<span>Not sure who to pick? Ask your Claude: <em>"Which supplier should we award for {{ r.title }}, and why? Save your recommendation in QuoteLoop."</em></span></div>
 {% endif %}
 

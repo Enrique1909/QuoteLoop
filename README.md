@@ -8,7 +8,6 @@ For small event agencies that buy AV, printing, catering and décor from the sam
 - QuoteLoop calculates totals (base + delivery + tax, in integer paise), flags quotes that aren't comparable, and shows the buyer's **history with each supplier**: past quoted vs agreed prices, on-time record, ratings, issues.
 - Claude reads that history through MCP and **saves a suggested counteroffer as a draft**. Nothing is sent automatically.
 - The buyer edits and sends the offer. The **supplier opens a private link** (no account, no Claude, and they never see competitors' quotes), then accepts or counters.
-- Claude can also **judge the award** (price vs reliability vs terms) and save a recommendation that a manager or client approves from a private link, and write **supplier reviews** from the spend data.
 - On agreement, terms are locked, savings vs the first quote are calculated, and the outcome feeds the supplier's history for next time.
 
 **No AI inside the app:** no model, no AI API keys. Claude runs on the customer's own plan.
@@ -21,15 +20,11 @@ For small event agencies that buy AV, printing, catering and décor from the sam
 ## MCP tools
 | Tool | Purpose |
 |---|---|
-| `create_sourcing_comparison` | Save a sourcing request and the extracted quotations (editable by the buyer; totals calculated by the app) |
-| `get_negotiation_context` | Current quote, other quotes (buyer-side only), history with the supplier, negotiation timeline |
-| `save_negotiation_draft` | Store a suggested counteroffer with reasoning and the history it relied on, for buyer review |
-| `record_supplier_reply` | Log a counteroffer the supplier sent on WhatsApp, phone or email (e.g. a pasted message) |
-| `get_sourcing_overview` | All quotes on a request with totals, history and levers, to judge the award |
-| `save_award_recommendation` | Claude's recommended supplier with rationale, risks and fallback; shared with an approver via a private link |
-| `get_spend_overview` | Spend, savings and reliability by supplier and category |
-| `save_supplier_review` | A supplier/spend review written by Claude, saved for the team |
+| `create_sourcing_comparison` | Save a sourcing request and the quotations Claude extracted (editable by the buyer; totals calculated by the app) |
+| `get_negotiation_context` | The supplier's quote, the buyer's history with them and QuoteLoop's rule-based levers, so Claude can advise on an offer |
 | `list_sourcing_requests` | Status of all requests |
+
+Additional actions (drafting, logging WhatsApp replies, award recommendations, spend reviews) exist in the code but are switched off (`QL_EXTRAS=1` enables them) to keep the product focused on one workflow.
 
 ## Run locally
 ```bash

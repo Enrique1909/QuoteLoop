@@ -45,6 +45,8 @@ STATUS = {
     "awaiting_buyer": ("Supplier replied: your move", "bg-brand-50 text-brand-700 border-brand-100"),
     "rejected": ("Rejected", "bg-rose-50 text-rose-700 border-rose-200"),
 }
+from app.mcp_server import EXTRAS
+templates.env.globals["extras"] = EXTRAS
 templates.env.globals.update(inr=format_inr, status=lambda k: STATUS.get(k, (k, "bg-slate-100 text-slate-700")))
 CATEGORY = {"av equipment": "bg-indigo-50 text-indigo-700 border-indigo-200", "printing": "bg-cyan-50 text-cyan-700 border-cyan-200",
             "catering": "bg-orange-50 text-orange-700 border-orange-200", "décor": "bg-rose-50 text-rose-700 border-rose-200",
@@ -65,6 +67,18 @@ def rate_limited(key: str, limit: int = 10, window: int = 60) -> bool:
         return True
     q.append(t)
     return False
+
+
+@app.exception_handler(Exception)
+async def _unexpected(request: Request, exc: Exception):
+    import logging
+    logging.getLogger("quoteloop").exception("Unhandled error on %s", request.url.path)
+    return templates.TemplateResponse(request, "error.html", {}, status_code=500)
+
+
+@app.exception_handler(services.NotFound)
+async def _not_found(request: Request, exc: services.NotFound):
+    return templates.TemplateResponse(request, "error.html", {"not_found": True}, status_code=404)
 
 
 @app.exception_handler(LoginRequired)
@@ -239,7 +253,11 @@ def add_quote(request: Request, rid: int, supplier_name: str = Form(...), base_i
     wid = require_login(request)
     with get_session() as s:
         r = services.get_request(s, wid, rid)
-        sup = services.get_or_create_supplier(s, wid, supplier_name, category=r.category)
+        if not supplier_name.strip():
+            return RedirectResponse(f"/requests/{rid}", status_code=303)
+        sup = services.get_or_create_supplier(s, wid, supplier_name.strip()[:120], category=r.category)
+        if services.quote_for(s, r.id, sup.id):
+            return RedirectResponse(f"/requests/{rid}", status_code=303)
         s.add(Quotation(request_id=r.id, supplier_id=sup.id, base_paise=inr_to_paise(base_inr or 0),
                         delivery_paise=inr_to_paise(delivery_inr or 0), tax_paise=inr_to_paise(tax_inr or 0),
                         quantity=to_int(quantity) or r.quantity, unit=unit.strip() or r.unit,

@@ -1,0 +1,13 @@
+name: Keep demo awake
+# Render's free plan sleeps after ~15 minutes idle; a cold start can make Claude's connector time out.
+# Ping the health check every 10 minutes (GitHub may delay scheduled runs by a few minutes).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - run: curl -fsS --max-time 90 https://clientroom.onrender.com/health || true

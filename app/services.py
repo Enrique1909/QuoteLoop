@@ -167,9 +167,9 @@ def buyer_send_offer(s: Session, n: Negotiation, *, price_paise: int, delivery: 
     if req.status == "agreed" or n.status not in ("draft", "awaiting_buyer"):
         raise InvalidState("You can only send an offer when it's your turn and the request isn't agreed yet.")
     if price_paise <= 0:
-        raise InvalidState("Offer price must be more than zero.")
-    o = Offer(negotiation_id=n.id, author="buyer", price_paise=price_paise, delivery_commitment=delivery.strip(),
-              terms=terms.strip(), message=message.strip(), author_name="Buyer")
+        raise InvalidState("Enter a valid offer price (more than zero).")
+    o = Offer(negotiation_id=n.id, author="buyer", price_paise=price_paise, delivery_commitment=delivery.strip()[:200],
+              terms=terms.strip()[:200], message=message.strip()[:2000], author_name="Buyer")
     s.add(o)
     req.status = "negotiating"
     _touch(s, n, "awaiting_supplier", req)
@@ -204,19 +204,19 @@ def supplier_respond(s: Session, n: Negotiation, *, action: str, name: str, pric
     if n.token_revoked or n.status != "awaiting_supplier":
         raise InvalidState("There is no offer waiting for your response.")
     buyer_offer = latest_offer(s, n.id, "buyer")
-    name = (name or "").strip() or "Supplier"
+    name = (name or "").strip()[:80] or "Supplier"
     if action == "accept":
         s.add(Offer(negotiation_id=n.id, author="supplier", kind="accept", price_paise=buyer_offer.price_paise,
-                    message=message.strip(), author_name=name))
+                    message=message.strip()[:2000], author_name=name))
         _finalize(s, n, buyer_offer.price_paise)
     elif action == "reject":
-        s.add(Offer(negotiation_id=n.id, author="supplier", kind="reject", message=message.strip(), author_name=name))
+        s.add(Offer(negotiation_id=n.id, author="supplier", kind="reject", message=message.strip()[:2000], author_name=name))
         _touch(s, n, "rejected")
     elif action == "counter":
         if price_paise <= 0:
             raise InvalidState("Enter your counteroffer price.")
         s.add(Offer(negotiation_id=n.id, author="supplier", price_paise=price_paise,
-                    delivery_commitment=delivery.strip(), message=message.strip(), author_name=name))
+                    delivery_commitment=delivery.strip()[:200], message=message.strip()[:2000], author_name=name))
         _touch(s, n, "awaiting_buyer")
     else:
         raise InvalidState("Unknown action.")
@@ -482,8 +482,8 @@ def log_supplier_reply(s: Session, n: Negotiation, *, price_paise: int, delivery
         raise InvalidState("A supplier reply can be logged only while you're waiting on them (or before you've sent anything).")
     if price_paise <= 0:
         raise InvalidState("Enter the price the supplier quoted.")
-    o = Offer(negotiation_id=n.id, author="supplier", price_paise=price_paise, delivery_commitment=delivery.strip(),
-              message=message.strip(), author_name=f"Logged from {via}")
+    o = Offer(negotiation_id=n.id, author="supplier", price_paise=price_paise, delivery_commitment=delivery.strip()[:200],
+              message=message.strip()[:2000], author_name=f"Logged from {via}")
     s.add(o)
     req.status = "negotiating"
     _touch(s, n, "awaiting_buyer", req)

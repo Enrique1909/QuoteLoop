@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, btn %}
+{% block mainclass %}max-w-xl mx-auto px-4 py-16{% endblock %}
+{% block body %}
+<div class="rounded-lg border border-slate-200 bg-white p-6">
+ <div class="flex items-center gap-2 text-slate-900">{{ icon('alert', 'h-5 w-5 text-amber-500') }}<h1 class="text-lg font-semibold">{{ 'Not found' if not_found else 'Something went wrong' }}</h1></div>
+ <p class="mt-2 text-sm text-slate-600">{{ "This page doesn't exist or isn't part of your workspace." if not_found else "That action couldn't be completed. Nothing was changed; please go back and try again." }}</p>
+ <a href="/dashboard" class="mt-5 {{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Back to dashboard</a>
+</div>
+{% endblock %}

@@ -57,7 +57,7 @@
  </section>
 </div>
 
-{% if review %}
+{% if extras %}{% if review %}
 <a href="/reviews/{{ review.id }}" class="mt-8 block rounded-lg border border-violet-200 bg-white hover:border-violet-300">
  <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-2.5"><span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-800">{{ icon('sparkle', 'h-3.5 w-3.5') }}Latest supplier review by your Claude</span><span class="text-[11px] text-slate-500">{{ review.created_at.strftime('%d %b %Y') }}</span></div>
  <div class="px-5 py-3"><p class="font-medium text-slate-900">{{ review.title }}</p><p class="mt-1 text-[13px] text-slate-600 line-clamp-2">{{ review.summary }}</p>
@@ -65,7 +65,7 @@
 </a>
 {% else %}
 <div class="mt-8 flex items-start gap-2 rounded-lg border border-dashed border-violet-200 bg-white px-4 py-3 text-[13px] text-slate-600">{{ icon('sparkle', 'h-4 w-4 text-violet-600 mt-0.5') }}<span>Ask your Claude: <em>"Review our supplier spend in QuoteLoop. Where are we overspending and which suppliers should we consolidate? Save the review."</em></span></div>
-{% endif %}
+{% endif %}{% endif %}
 
 <section class="mt-8 bg-white rounded-lg border border-slate-200 overflow-hidden">
  <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2"><h2 class="font-semibold">Supplier scorecard</h2><p class="text-xs text-slate-500">From your own quotes, agreements and delivery records</p></div>
