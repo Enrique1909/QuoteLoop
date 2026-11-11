@@ -68,6 +68,7 @@
      {% if h.avg_discount_pct %}<p class="text-xs text-slate-600">Usually agrees {{ h.avg_discount_pct }}% below quote</p>{% endif %}
      {% if h.issues %}<p class="text-xs text-slate-500 italic mt-0.5">“{{ h.issues[0] }}”</p>{% endif %}
     {% else %}<p class="text-xs text-slate-400">New supplier</p>{% endif %}
+    {% if x.levers.levers and r.status != 'agreed' %}<p class="mt-1 text-xs font-semibold text-violet-700">💡 {{ x.levers.levers|length }} negotiation lever{{ '' if x.levers.levers|length == 1 else 's' }}{% if x.levers.target_paise %} · open at {{ inr(x.levers.target_paise) }}{% endif %}</p>{% endif %}
    </td>
    <td class="px-4 py-4 text-right whitespace-nowrap">
     {% if r.status != 'agreed' %}<a href="/quotes/{{ q.id }}/edit" class="{{ btn('text-slate-600 hover:bg-slate-100') }}">Edit</a>{% endif %}

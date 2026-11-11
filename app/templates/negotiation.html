@@ -35,6 +35,29 @@
  </div>
 
  <div class="lg:col-span-3 space-y-6">
+  {% if lv.levers and n.status in ('draft', 'awaiting_buyer') %}
+  <section class="bg-white rounded-xl ring-1 ring-slate-200 overflow-hidden">
+   <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+    <h2 class="font-semibold">💡 Negotiation levers</h2>
+    <span class="text-[11px] text-slate-500">From your records with {{ sup.name }} · fixed rules, no AI</span>
+   </div>
+   {% if lv.target_paise %}
+   <div class="px-5 py-3 bg-violet-50/60 border-b border-violet-100 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+    <span class="text-xs font-semibold uppercase tracking-wide text-violet-700">Suggested opening offer</span>
+    <span class="text-xl font-bold num text-violet-900">{{ inr(lv.target_paise) }}</span>
+    <span class="text-xs text-slate-500">quote {{ inr(lv.quote_paise) }} {{ lv.target_basis|join(', ') }}</span>
+   </div>
+   {% endif %}
+   <ul class="divide-y divide-slate-100">
+   {% for l in lv.levers %}
+    <li class="px-5 py-3 flex gap-3">
+     <span class="mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase {{ 'bg-rose-100 text-rose-700' if l.strength == 'strong' else ('bg-amber-100 text-amber-800' if l.strength == 'medium' else 'bg-slate-100 text-slate-600') }}">{{ l.strength }}</span>
+     <div><p class="text-sm font-semibold text-slate-900">{{ l.title }}</p><p class="text-xs text-slate-500">{{ l.evidence }}</p><p class="mt-1 text-sm text-slate-700">→ {{ l.ask }}</p></div>
+    </li>
+   {% endfor %}
+   </ul>
+  </section>
+  {% endif %}
   {% if draft and n.status in ('draft', 'awaiting_buyer') %}
   <section class="rounded-xl ring-1 ring-violet-200 bg-violet-50/60 p-5">
    <div class="flex items-center gap-2">{{ pill('Suggested by your Claude', 'bg-violet-600 text-white') }}<span class="text-xs text-violet-700">review before sending: nothing is sent automatically</span></div>

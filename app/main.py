@@ -205,6 +205,8 @@ def request_page(request: Request, rid: int):
         except services.NotFound:
             return RedirectResponse("/dashboard", status_code=303)
         rows = services.comparison(s, r)
+        for x in rows:
+            x["levers"] = services.negotiation_levers(s, r, x["supplier"])
         agreed = None
         if r.agreed_supplier_id:
             first = services.quote_for(s, r.id, r.agreed_supplier_id)
@@ -297,6 +299,7 @@ def negotiation_page(request: Request, nid: int, error: str = ""):
         last_sup = services.latest_offer(s, n.id, "supplier")
         last_buy = services.latest_offer(s, n.id, "buyer")
         hist = services.history_summary(s, wid, sup.id)
+        lv = services.negotiation_levers(s, r, sup)
         link = f"{base_url(request)}/s/{n.token}"
         msg = (f"Hi, here is our offer for {r.title}. Please review and respond here: {link}")
         prefill = None
@@ -305,10 +308,11 @@ def negotiation_page(request: Request, nid: int, error: str = ""):
                 prefill = {"price": draft.price_paise // 100, "delivery": draft.delivery_commitment,
                            "terms": draft.terms, "message": draft.message}
             else:
-                prefill = {"price": (last_sup.price_paise if last_sup else q.total_paise) // 100,
+                start = last_sup.price_paise if last_sup else (lv["target_paise"] or q.total_paise)
+                prefill = {"price": start // 100,
                            "delivery": r.needed_by and f"By {r.needed_by}" or "", "terms": q.payment_terms, "message": ""}
         return render(request, "negotiation.html", n=n, r=r, sup=sup, q=q, offers=offers, draft=draft,
-                      last_sup=last_sup, last_buy=last_buy, hist=hist, link=link, prefill=prefill, error=error,
+                      last_sup=last_sup, last_buy=last_buy, hist=hist, lv=lv, link=link, prefill=prefill, error=error,
                       wa=f"https://wa.me/?text={urlquote(msg)}",
                       mail=f"mailto:?subject={urlquote('Offer: ' + r.title)}&body={urlquote(msg)}")
 

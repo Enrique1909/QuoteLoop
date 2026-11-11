@@ -104,7 +104,8 @@ def create_sourcing_comparison(ctx: Context, title: str, specifications: str, qu
 def get_negotiation_context(ctx: Context, request_id: int, supplier_id: int) -> dict:
     """Everything needed to plan a negotiation with one supplier on one request.
 
-    Returns this supplier's current quote, the other quotes on the request (buyer-side only), the buyer's history
+    Includes negotiation levers QuoteLoop calculated from the buyer's own records (rule-based, not AI) and a
+    suggested opening offer. Returns this supplier's current quote, the other quotes on the request (buyer-side only), the buyer's history
     with this supplier (quoted vs agreed prices, quantities, dates, on-time delivery, ratings, issues) and the
     negotiation timeline so far.
     """
@@ -119,6 +120,7 @@ def get_negotiation_context(ctx: Context, request_id: int, supplier_id: int) -> 
         if not q:
             raise ToolError(f"{sup.name} has no quotation on request {request_id}.")
         hist = services.history_summary(s, wid, sup.id)
+        lv = services.negotiation_levers(s, req, sup)
         n = s.exec(select(services.Negotiation).where(services.Negotiation.request_id == req.id,
                                                       services.Negotiation.supplier_id == sup.id)).first()
         return {
@@ -136,6 +138,9 @@ def get_negotiation_context(ctx: Context, request_id: int, supplier_id: int) -> 
                 "status": n.status if n else "not started",
                 "offers": [services.offer_dict(o) for o in services.timeline(s, n.id)] if n else [],
             },
+            "levers_calculated_by_quoteloop": [{k: l[k] for k in ("title", "evidence", "ask", "strength")} for l in lv["levers"]],
+            "suggested_opening_offer": format_inr(lv["target_paise"]) if lv["target_paise"] else None,
+            "suggested_opening_offer_basis": lv["target_basis"],
             "comparability_note": "Only compare prices where quantity and specifications match; dates are given.",
         }
 

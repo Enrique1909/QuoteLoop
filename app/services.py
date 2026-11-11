@@ -323,3 +323,111 @@ def supplier_scorecard(s: Session, wid: int) -> list[dict]:
             "last": max(e.date for e in rows),
         })
     return sorted(out, key=lambda x: x["spend"], reverse=True)
+
+
+# ---------- negotiation levers (fixed rules over the buyer's own data; no AI) ----------
+def _round500(paise: int) -> int:
+    step = 50000  # ₹500
+    return int(round(paise / step)) * step
+
+
+def negotiation_levers(s: Session, req: SourcingRequest, sup: Supplier) -> dict:
+    """Return evidence-based levers and a suggested opening offer.
+
+    Every lever is an if/then rule on recorded quotes, agreements and delivery outcomes.
+    """
+    from decimal import Decimal
+
+    q = quote_for(s, req.id, sup.id)
+    if not q:
+        return {"levers": [], "target_paise": None, "target_basis": []}
+    hist = history_summary(s, req.workspace_id, sup.id)
+    rows = hist["rows"]
+    recorded = [e for e in rows if e.on_time is not None]
+    levers, basis = [], []
+    target = Decimal(q.total_paise)
+
+    # 1. Their usual discount from first quote
+    if hist["avg_discount_pct"] and hist["avg_discount_pct"] >= 2:
+        d = Decimal(str(hist["avg_discount_pct"]))
+        target = target * (1 - d / 100)
+        basis.append(f"−{d}% (their usual discount)")
+        levers.append({"type": "discount_history", "strength": "strong", "title": f"They usually agree {d}% below their first quote",
+                       "evidence": "; ".join(f"{e.date}: quoted {format_inr(e.quoted_paise)} → agreed {format_inr(e.agreed_paise)}"
+                                             for e in rows if e.agreed_paise < e.quoted_paise)[:240],
+                       "ask": f"Open at about {format_inr(_round500(int(Decimal(q.total_paise) * (1 - d / 100))))} instead of accepting {format_inr(q.total_paise)}."})
+
+    # 2. Late deliveries
+    late = [e for e in recorded if e.on_time is False]
+    if late:
+        target = target * Decimal("0.95")
+        basis.append("−5% (late-delivery risk)")
+        note = next((e.notes for e in late if e.notes), "")
+        levers.append({"type": "late_delivery", "strength": "strong", "title": f"Late on {len(late)} of {len(recorded)} recorded jobs",
+                       "evidence": (f"Latest: {late[0].date}, {late[0].item}" + (f" ({note})" if note else "")),
+                       "ask": "Ask for a lower price, or a written late-delivery penalty (e.g. 10% off if setup isn't ready on time)."})
+
+    # 3. Scope or price not honoured before
+    broken = [e for e in recorded if e.scope_honored is False or e.price_honored is False]
+    if broken:
+        e = broken[0]
+        levers.append({"type": "scope_issue", "strength": "medium", "title": "Didn't deliver the full agreed scope last time",
+                       "evidence": f"{e.date}, {e.item}" + (f": {e.notes}" if e.notes else ""),
+                       "ask": "Get every deliverable listed in the offer, and ask for a credit if anything is missing."})
+
+    # 4. Cheaper comparable competitor
+    comparable = [o for o in quotations(s, req.id) if o.supplier_id != sup.id and not any(
+        "not directly comparable" in f for f in quote_flags(req, o))]
+    cheaper = sorted([o for o in comparable if o.total_paise < q.total_paise], key=lambda o: o.total_paise)
+    if cheaper:
+        low = cheaper[0]
+        gap = pct(q.total_paise - low.total_paise, q.total_paise)
+        levers.append({"type": "competitor_price", "strength": "strong", "title": f"A comparable quote is {gap}% lower",
+                       "evidence": f"Lowest comparable total: {format_inr(low.total_paise)} (supplier name stays private)",
+                       "ask": f"Tell them you have a lower comparable quote and ask them to match or close the gap."})
+
+    # 5. Better payment terms elsewhere
+    credit = [o for o in comparable if "credit" in (o.payment_terms or "").lower()]
+    if credit and "advance" in (q.payment_terms or "").lower():
+        levers.append({"type": "payment_terms", "strength": "medium", "title": "Another supplier offers credit; this one wants advance",
+                       "evidence": f"This quote: {q.payment_terms}. Elsewhere: {credit[0].payment_terms}",
+                       "ask": "Ask to reduce the advance (e.g. 30% instead of 50%) or for part-payment after the event."})
+
+    # 6. Delivery charge others include
+    if q.delivery_paise > 0 and any(o.delivery_paise == 0 for o in comparable):
+        levers.append({"type": "delivery_charge", "strength": "medium", "title": f"Delivery charged at {format_inr(q.delivery_paise)}",
+                       "evidence": "A comparable quote includes delivery and setup at no extra cost",
+                       "ask": f"Ask them to waive the {format_inr(q.delivery_paise)} delivery charge."})
+
+    # 7. Price vs last job with the same spec (only like-for-like; otherwise flagged as a different spec)
+    norm = lambda t: " ".join("".join(ch.lower() if ch.isalnum() else " " for ch in (t or "")).split())
+    req_spec = norm(req.specifications)
+    same_unit = [e for e in rows if (e.unit or "") == (req.unit or "") and e.quantity == req.quantity]
+    same_spec = [e for e in same_unit if norm(e.specifications) and norm(e.specifications) in req_spec]
+    if same_spec and q.total_paise > same_spec[0].agreed_paise:
+        e = same_spec[0]
+        up = pct(q.total_paise - e.agreed_paise, e.agreed_paise)
+        levers.append({"type": "price_increase", "strength": "strong" if up >= 5 else "medium",
+                       "title": f"{up}% above what you paid them for the same spec",
+                       "evidence": f"{e.date}, {e.item}: agreed {format_inr(e.agreed_paise)} ({e.specifications})",
+                       "ask": "Ask them to hold last time's price, or explain what changed."})
+    elif same_unit and q.total_paise > same_unit[0].agreed_paise:
+        e = same_unit[0]
+        levers.append({"type": "price_reference", "strength": "light",
+                       "title": "Last job with them was a different spec",
+                       "evidence": f"{e.date}, {e.item}: agreed {format_inr(e.agreed_paise)} ({e.specifications})",
+                       "ask": "Use it as a reference only; ask for a line-by-line price to compare like for like."})
+
+    # 8. Loyalty
+    if len(rows) >= 2:
+        spend = sum(e.agreed_paise for e in rows)
+        levers.append({"type": "loyalty", "strength": "light", "title": f"Repeat customer: {len(rows)} jobs, {format_inr(spend)} so far",
+                       "evidence": f"Since {rows[-1].date}", "ask": "Ask for a repeat-customer discount or a free add-on."})
+
+    target_paise = _round500(int(target)) if basis else None
+    if target_paise is not None and cheaper and target_paise < int(cheaper[0].total_paise * 0.9):
+        target_paise = _round500(int(cheaper[0].total_paise * 0.9))
+        basis.append("floored at 10% below the lowest comparable quote")
+    order = {"strong": 0, "medium": 1, "light": 2}
+    levers.sort(key=lambda l: order[l["strength"]])
+    return {"levers": levers, "target_paise": target_paise, "target_basis": basis, "quote_paise": q.total_paise}
