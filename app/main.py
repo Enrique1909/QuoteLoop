@@ -142,31 +142,55 @@ def logout(request: Request):
 # ---------- buyer ----------
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
+    """Negotiation inbox: what needs action, what's waiting on suppliers, what was recently agreed."""
     wid = require_login(request)
     with get_session() as s:
         ws = s.get(Workspace, wid)
-        rows = _request_rows(s, wid)
-        req_ids = [x["r"].id for x in rows]
-        activity = []
-        if req_ids:
-            negs = {n.id: n for n in s.exec(select(Negotiation).where(Negotiation.request_id.in_(req_ids)))}
-            for o in s.exec(select(Offer).where(Offer.negotiation_id.in_(list(negs) or [0])).order_by(Offer.id.desc()).limit(5)):
-                n = negs[o.negotiation_id]
-                activity.append({"o": o, "n": n, "supplier": s.get(Supplier, n.supplier_id).name,
-                                 "request": s.get(SourcingRequest, n.request_id).title})
+        reqs = list(s.exec(select(SourcingRequest).where(SourcingRequest.workspace_id == wid)
+                           .order_by(SourcingRequest.id.desc())))
+        action, waiting, agreed = [], [], []
+        for r in reqs:
+            negs = list(s.exec(select(Negotiation).where(Negotiation.request_id == r.id)))
+            if r.status == "agreed":
+                first = services.quote_for(s, r.id, r.agreed_supplier_id)
+                agreed.append({"r": r, "supplier": s.get(Supplier, r.agreed_supplier_id), "original": first.total_paise if first else None,
+                               "final": r.agreed_price_paise,
+                               "reduction": (first.total_paise - r.agreed_price_paise) if first else 0,
+                               "pct": pct(first.total_paise - r.agreed_price_paise, first.total_paise) if first else None,
+                               "n": next((n for n in negs if n.status == "agreed"), None)})
+                continue
+            if r.status == "closed":
+                continue
+            for n in negs:
+                sup = s.get(Supplier, n.supplier_id)
+                if n.status == "awaiting_buyer":
+                    o = services.latest_offer(s, n.id, "supplier")
+                    q = services.quote_for(s, r.id, sup.id)
+                    action.append({"kind": "reply", "r": r, "n": n, "supplier": sup, "amount": o.price_paise if o else None,
+                                   "original": q.total_paise if q else None, "at": o.created_at if o else n.updated_at})
+                elif n.status == "awaiting_supplier":
+                    o = services.latest_offer(s, n.id, "buyer")
+                    waiting.append({"r": r, "n": n, "supplier": sup, "amount": o.price_paise if o else None,
+                                    "at": o.created_at if o else n.updated_at})
+            live = [n for n in negs if n.status in ("awaiting_buyer", "awaiting_supplier")]
+            if not live:
+                qs = services.quotations(s, r.id)
+                action.append({"kind": "start", "r": r, "quotes": len(qs),
+                               "lowest": min((q.total_paise for q in qs), default=None), "at": r.created_at})
+        agreed.sort(key=lambda x: x["r"].agreed_at or x["r"].created_at, reverse=True)
+        action.sort(key=lambda x: (0 if x["kind"] == "reply" else 1))
         scorecard = services.supplier_scorecard(s, wid)
-    active = sorted([x for x in rows if x["r"].status in ("comparing", "negotiating")],
-                    key=lambda x: (0 if x["state"] == "action" else 1, -x["r"].id))
-    agreed = [x for x in rows if x["r"].status == "agreed"]
-    stats = {"active": len(active), "open": sum(x["your_turn"] + x["waiting"] for x in rows),
-             "your_turn": sum(1 for x in rows if x["state"] == "action"),
-             "spend": sum(x["spend"] for x in scorecard), "saved": sum(x["saved"] for x in scorecard),
-             "jobs": sum(x["jobs"] for x in scorecard)}
+    stats = {"action": len(action), "waiting": len(waiting), "agreed": len(agreed),
+             "reductions": sum(max(0, x["reduction"]) for x in agreed)}
+    return render(request, "dashboard.html", ws=ws, action=action, waiting=waiting, agreed=agreed[:5],
+                  agreed_count=len(agreed), stats=stats, top_suppliers=scorecard[:3])
+
+
+@app.get("/suppliers", response_class=HTMLResponse)
+def suppliers_page(request: Request):
+    wid = require_login(request)
     with get_session() as s:
-        review = s.exec(select(SupplierReview).where(SupplierReview.workspace_id == wid)
-                        .order_by(SupplierReview.id.desc())).first()
-    return render(request, "dashboard.html", ws=ws, active=active, agreed=agreed, stats=stats, activity=activity,
-                  scorecard=scorecard, agreed_total=sum(x["r"].agreed_price_paise or 0 for x in agreed), review=review)
+        return render(request, "suppliers.html", scorecard=services.supplier_scorecard(s, wid))
 
 
 def _request_rows(s, wid):
@@ -376,7 +400,13 @@ def negotiation_page(request: Request, nid: int, error: str = ""):
                 start = last_sup.price_paise if last_sup else (lv["target_paise"] or q.total_paise)
                 prefill = {"price": start // 100,
                            "delivery": r.needed_by and f"By {r.needed_by}" or "", "terms": q.payment_terms, "message": ""}
+        rows = services.comparison(s, r)
+        accepted = next((o for o in reversed(offers) if o.kind == "accept"), None)
+        final_offer = None
+        if accepted:
+            final_offer = next((o for o in reversed(offers) if o.kind == "offer" and o.id < accepted.id), None)
         return render(request, "negotiation.html", n=n, r=r, sup=sup, q=q, offers=offers, draft=draft,
+                      rows=rows, accepted=accepted, final_offer=final_offer,
                       last_sup=last_sup, last_buy=last_buy, hist=hist, lv=lv, link=link, prefill=prefill, error=error,
                       wa=f"https://wa.me/?text={urlquote(msg)}",
                       mail=f"mailto:?subject={urlquote('Offer: ' + r.title)}&body={urlquote(msg)}")
@@ -516,7 +546,7 @@ def supplier_link(request: Request, token: str, done: str = "", error: str = "")
 
 @app.post("/s/{token}/respond")
 def supplier_respond(request: Request, token: str, action: str = Form(...), name: str = Form(""),
-                     price_inr: str = Form(""), delivery: str = Form(""), message: str = Form("")):
+                     price_inr: str = Form(""), delivery: str = Form(""), message: str = Form(""), terms: str = Form("")):
     ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0]
     if rate_limited(f"{token}:{ip}"):
         return RedirectResponse(f"/s/{token}?error={urlquote('Too many attempts. Please wait a minute.')}", status_code=303)
@@ -526,7 +556,7 @@ def supplier_respond(request: Request, token: str, action: str = Form(...), name
             return RedirectResponse(f"/s/{token}", status_code=303)
         try:
             services.supplier_respond(s, n, action=action, name=name, price_paise=inr_to_paise(price_inr or 0),
-                                      delivery=delivery, message=message)
+                                      delivery=delivery, message=message, terms=terms)
         except services.InvalidState as e:
             return RedirectResponse(f"/s/{token}?error={urlquote(str(e))}", status_code=303)
     return RedirectResponse(f"/s/{token}?done={action}", status_code=303)

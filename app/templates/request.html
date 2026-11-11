@@ -78,7 +78,7 @@
 <section class="mt-6 bg-white rounded-lg border border-slate-200 overflow-hidden">
  <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between"><h2 class="font-semibold">Supplier comparison</h2><p class="text-xs text-slate-500">Totals = base + delivery + tax, calculated by QuoteLoop</p></div>
  <div class="overflow-x-auto">
- <table class="w-full text-sm">
+ <table class="w-full min-w-[1040px] text-sm">
   <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr>
    <th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Base</th><th class="px-4 py-2 text-right">Delivery</th><th class="px-4 py-2 text-right">Tax</th><th class="px-4 py-2 text-right">Total</th><th class="px-4 py-2 text-left">Lead time · payment</th><th class="px-4 py-2 text-left">Your history with them</th><th class="px-4 py-2"></th></tr></thead>
   <tbody class="divide-y divide-slate-100">
@@ -117,7 +117,7 @@
    <td class="px-4 py-4 text-right whitespace-nowrap">
     {% if r.status != 'agreed' %}<a href="/quotes/{{ q.id }}/edit" class="{{ btn('text-slate-600 hover:bg-slate-100') }}">Edit</a>{% endif %}
     {% if x.negotiation %}<a href="/negotiations/{{ x.negotiation.id }}" class="{{ btn('bg-brand-900 text-white hover:bg-brand-800') }}">{{ status(x.negotiation.status)[0] }}</a>
-    {% elif r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/negotiate/{{ x.supplier.id }}" class="inline"><button class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Negotiate</button></form>{% endif %}
+    {% elif r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/negotiate/{{ x.supplier.id }}" class="inline"><button class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Start negotiation</button></form>{% endif %}
     {% if r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/suppliers/{{ x.supplier.id }}/remove" class="mt-1" onsubmit="return confirm('Remove {{ x.supplier.name }} from this request? Their quote, negotiation and private link will be removed.')"><button class="text-xs text-slate-400 hover:text-rose-600">Remove supplier</button></form>{% endif %}
    </td>
   </tr>

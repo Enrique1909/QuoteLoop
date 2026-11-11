@@ -1,133 +1,155 @@
 {% extends "base.html" %}
-{% from "macros.html" import badge, pill, btn, input, icon, stars %}
+{% from "macros.html" import icon, stars, badge, pill, btn, input %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block body %}
 {% set leaf = sup.name %}{% include "crumbs.html" %}
-<div class="mt-2 flex flex-wrap items-center gap-3"><h1 class="text-xl font-semibold tracking-tight">Negotiation with {{ sup.name }}</h1>{{ badge(n.status) }}</div>
-{% if error %}<div class="mt-4 rounded-lg bg-rose-50 border border-rose-200 px-4 py-3 text-sm text-rose-800">{{ error }}</div>{% endif %}
-
-<div class="mt-6 grid lg:grid-cols-5 gap-6">
- <div class="lg:col-span-2 space-y-6">
-  <section class="bg-white rounded-lg border border-slate-200 p-5">
-   <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Their original quote</h2>
-   <p class="mt-1 text-xl font-semibold tracking-tight num">{{ inr(q.total_paise) }}</p>
-   <p class="text-xs text-slate-500 num">Base {{ inr(q.base_paise) }} · delivery {{ inr(q.delivery_paise) if q.delivery_paise else 'incl.' }} · tax {{ inr(q.tax_paise) if q.tax_paise else '—' }}</p>
-   <p class="mt-2 text-sm">{{ (q.lead_time_days ~ ' days lead time') if q.lead_time_days is not none else 'Lead time not stated' }} · {{ q.payment_terms or 'terms not stated' }}</p>
-  </section>
-  <section class="bg-white rounded-lg border border-slate-200 p-5">
-   <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your history with {{ sup.name }}</h2>
-   {% if hist.engagements %}
-   <div class="mt-2 grid grid-cols-3 gap-2 text-center">
-    <div class="rounded-lg bg-slate-50 p-2"><p class="text-lg font-bold">{{ hist.engagements }}</p><p class="text-[11px] text-slate-500">past jobs</p></div>
-    <div class="rounded-lg {{ 'bg-rose-50' if hist.on_time_rate is not none and hist.on_time_rate < 70 else 'bg-emerald-50' }} p-2"><p class="text-lg font-bold">{{ (hist.on_time_rate|int ~ '%') if hist.on_time_rate is not none else '—' }}</p><p class="text-[11px] text-slate-500">on time</p></div>
-    <div class="rounded-lg bg-slate-50 p-2"><p class="text-lg font-bold">{{ hist.avg_discount_pct or 0 }}%</p><p class="text-[11px] text-slate-500">avg below quote</p></div>
-   </div>
-   <ul class="mt-3 space-y-2 text-xs">{% for e in hist.rows[:4] %}
-    <li class="border-t border-slate-100 pt-2"><p class="font-medium text-slate-700">{{ e.date }} · {{ e.item }}</p><p class="text-slate-500">{{ e.specifications }} · {{ e.quantity }} {{ e.unit }}</p>
-     <p class="num">Quoted {{ inr(e.quoted_paise) }}, agreed <strong>{{ inr(e.agreed_paise) }}</strong>{% if e.on_time is not none %} · {{ 'on time' if e.on_time else 'LATE' }}{% endif %}{% if e.rating %} · {{ stars(e.rating) }}{% endif %}</p>
-     {% if e.notes %}<p class="italic text-slate-500">“{{ e.notes }}”</p>{% endif %}</li>{% endfor %}</ul>
-   {% else %}<p class="mt-2 text-sm text-slate-500">No history yet with this supplier.</p>{% endif %}
-  </section>
-  <section class="bg-white rounded-lg border border-slate-200 p-5">
-   <h2 class="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-3">Timeline</h2>
-   {% set buyer_label = "You" %}{% set supplier_label = sup.name %}{% include "timeline.html" %}
-  </section>
- </div>
-
- <div class="lg:col-span-3 space-y-6">
-  {% if lv.levers and n.status in ('draft', 'awaiting_buyer') %}
-  <section class="bg-white rounded-lg border border-slate-200 overflow-hidden">
-   <div class="px-5 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
-    <h2 class="flex items-center gap-2 font-semibold">{{ icon('lightbulb', 'h-4 w-4 text-amber-500') }}Negotiation levers</h2>
-    <span class="text-[11px] text-slate-500">From your records with {{ sup.name }} · fixed rules, no AI</span>
-   </div>
-   {% if lv.target_paise %}
-   <div class="px-5 py-3 bg-slate-50 border-b border-slate-100 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-    <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Suggested opening offer</span>
-    <span class="text-lg font-semibold num text-slate-900">{{ inr(lv.target_paise) }}</span>
-    <span class="text-xs text-slate-500">quote {{ inr(lv.quote_paise) }} {{ lv.target_basis|join(', ') }}</span>
-   </div>
-   {% endif %}
 {% set LICON = {'discount_history': 'trending-down', 'late_delivery': 'clock', 'scope_issue': 'alert', 'competitor_price': 'list', 'payment_terms': 'info', 'delivery_charge': 'send', 'price_increase': 'trending-down', 'price_reference': 'info', 'loyalty': 'star'} %}
-   <ul class="divide-y divide-slate-100">
-   {% for l in lv.levers %}
-    <li class="grid grid-cols-[2rem_1fr_auto] items-start gap-x-3 px-5 py-3">
-     <span class="grid h-8 w-8 place-items-center rounded-md {{ 'bg-rose-50 text-rose-600' if l.strength == 'strong' else ('bg-amber-50 text-amber-600' if l.strength == 'medium' else 'bg-slate-100 text-slate-500') }}">{{ icon(LICON.get(l.type, 'info'), 'h-4 w-4') }}</span>
-     <div class="min-w-0">
-      <p class="text-sm font-medium text-slate-900">{{ l.title }}</p>
-      <p class="text-xs text-slate-500">{{ l.evidence }}</p>
-      <p class="mt-1.5 flex items-start gap-1.5 text-[13px] text-slate-700">{{ icon('arrow-right', 'h-3.5 w-3.5 mt-0.5 text-slate-400') }}<span>{{ l.ask }}</span></p>
-     </div>
-     <span class="self-start rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide {{ 'border-rose-200 text-rose-700' if l.strength == 'strong' else ('border-amber-200 text-amber-700' if l.strength == 'medium' else 'border-slate-200 text-slate-500') }}">{{ l.strength }}</span>
-    </li>
-   {% endfor %}
-   </ul>
-  </section>
-  {% endif %}
-  {% if extras and draft and n.status in ('draft', 'awaiting_buyer') %}
-  <section class="rounded-lg border border-brand-100 bg-brand-50/60 p-5">
-   <div class="flex items-center gap-2"><span class="inline-flex items-center gap-1 rounded-md bg-brand-900 px-2 py-0.5 text-[11px] font-medium text-white">{{ icon('sparkle', 'h-3 w-3') }}Suggested by your Claude</span><span class="text-xs text-brand-700">review before sending: nothing is sent automatically</span></div>
-   <p class="mt-3 text-xl font-semibold tracking-tight num text-brand-900">{{ inr(draft.price_paise) }}</p>
-   {% if draft.reasoning %}<p class="mt-2 text-sm text-slate-700 whitespace-pre-line">{{ draft.reasoning }}</p>{% endif %}
-   {% if draft.references %}<ul class="mt-2 list-disc ml-5 text-xs text-slate-600">{% for ref in draft.references %}<li>{{ ref }}</li>{% endfor %}</ul>{% endif %}
-  </section>
-  {% endif %}
 
+{# ---------- header ---------- #}
+<section class="mt-3 rounded-lg border border-slate-200 bg-white px-5 py-4 flex flex-wrap items-start justify-between gap-3">
+ <div class="min-w-0">
+  <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500 truncate">{{ r.title }}{% if r.category %} · {{ r.category }}{% endif %}</p>
+  <h1 class="mt-0.5 text-2xl font-semibold tracking-tight text-slate-900">{{ sup.name }}</h1>
+  <p class="text-[13px] text-slate-500">{{ (q.lead_time_days ~ '-day lead time') if q.lead_time_days is not none else 'Lead time not stated' }} · {{ q.payment_terms or 'payment terms not stated' }}{% if r.needed_by %} · needed by {{ r.needed_by }}{% endif %}</p>
+ </div>
+ {% if n.status == 'awaiting_buyer' %}<span class="inline-flex items-center gap-1.5 rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white"><span class="h-1.5 w-1.5 rounded-full bg-white"></span>Your turn</span>
+ {% else %}{{ badge(n.status) }}{% endif %}
+</section>
+{% if error %}<div class="mt-4 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ icon('alert', 'h-4 w-4') }}{{ error }}</div>{% endif %}
+
+<div class="mt-5 grid lg:grid-cols-5 gap-5">
+ <div class="lg:col-span-3 space-y-5">
+
+  {# ---------- hero: depends on the deal's state ---------- #}
   {% if n.status == 'awaiting_buyer' and last_sup %}
-  <section class="rounded-lg border-2 border-brand-300 bg-white p-5">
-   <p class="text-xs font-semibold uppercase tracking-wide text-brand-700">{{ sup.name }} countered</p>
-   <p class="mt-1 text-3xl font-semibold tracking-tight num">{{ inr(last_sup.price_paise) }}</p>
-   {% if last_sup.delivery_commitment %}<p class="text-sm text-slate-600">{{ last_sup.delivery_commitment }}</p>{% endif %}
-   {% if last_sup.message %}<p class="mt-2 text-sm bg-slate-50 rounded-lg px-3 py-2">“{{ last_sup.message }}”</p>{% endif %}
-   <div class="mt-4 flex flex-wrap gap-2">
-    <form method="post" action="/negotiations/{{ n.id }}/accept"><button class="{{ btn('bg-emerald-600 text-white hover:bg-emerald-700') }}">{{ icon('check') }}Accept {{ inr(last_sup.price_paise) }}</button></form>
-    <form method="post" action="/negotiations/{{ n.id }}/reject"><button class="{{ btn('text-rose-700 border border-rose-200 hover:bg-rose-50') }}">Reject</button></form>
+  <section class="rounded-lg border-2 border-brand-600 bg-white p-5">
+   <p class="text-[11px] font-semibold uppercase tracking-wide text-brand-700">Latest counteroffer from {{ sup.name }}</p>
+   <p class="mt-1 text-4xl font-semibold tracking-tight num text-slate-900">{{ inr(last_sup.price_paise) }}</p>
+   <dl class="mt-3 divide-y divide-slate-100 text-sm">
+    <div class="flex justify-between py-1.5"><dt class="text-slate-500">Original quote</dt><dd class="num">{{ inr(q.total_paise) }}</dd></div>
+    {% if q.total_paise > last_sup.price_paise %}<div class="flex justify-between py-1.5"><dt class="text-slate-500">Reduction vs original</dt><dd class="num font-medium text-emerald-700">{{ inr(q.total_paise - last_sup.price_paise) }} · {{ ((q.total_paise - last_sup.price_paise) * 1000 // q.total_paise) / 10 }}%</dd></div>{% endif %}
+    {% if last_buy %}<div class="flex justify-between py-1.5"><dt class="text-slate-500">Your last offer</dt><dd class="num">{{ inr(last_buy.price_paise) }}</dd></div>{% endif %}
+    {% if last_sup.delivery_commitment %}<div class="flex justify-between py-1.5"><dt class="text-slate-500">Delivery</dt><dd>{{ last_sup.delivery_commitment }}</dd></div>{% endif %}
+   </dl>
+   {% if last_sup.message %}<p class="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">“{{ last_sup.message }}”</p>{% endif %}
+   <div class="mt-4 grid sm:grid-cols-2 gap-2">
+    <form method="post" action="/negotiations/{{ n.id }}/accept"><button class="w-full {{ btn('bg-brand-900 text-white hover:bg-brand-800 py-2.5') }}">{{ icon('check') }}Accept {{ inr(last_sup.price_paise) }}</button></form>
+    <button type="button" onclick="document.getElementById('counter').open=true;document.getElementById('counter').scrollIntoView({behavior:'smooth'})" class="w-full {{ btn('border border-slate-300 bg-white hover:bg-slate-50 py-2.5') }}">Counter again</button>
    </div>
-   <p class="mt-3 text-xs text-slate-500">Or send a new counteroffer below.</p>
+   <form method="post" action="/negotiations/{{ n.id }}/reject" class="mt-2 text-right" onsubmit="return confirm('End this negotiation with {{ sup.name }}?')"><button class="text-[12px] text-slate-400 hover:text-rose-600">Reject and end negotiation</button></form>
   </section>
+
+  {% elif n.status == 'awaiting_supplier' and last_buy %}
+  <section class="rounded-lg border border-amber-200 bg-white p-5">
+   <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-700">{{ icon('clock', 'h-3.5 w-3.5') }}Waiting for {{ sup.name }}</p>
+   <p class="mt-1 text-4xl font-semibold tracking-tight num">{{ inr(last_buy.price_paise) }}</p>
+   <p class="text-[13px] text-slate-500">Your offer, sent {{ last_buy.created_at.strftime('%d %b, %H:%M') }} UTC · original quote {{ inr(q.total_paise) }}</p>
+   <div class="mt-4 rounded-md bg-slate-50 p-3">
+    <p class="text-[12px] text-slate-600">Share the offer. {{ sup.name }} can accept or counter in one tap, with no account and no Claude, and sees only their own quote.</p>
+    <div class="mt-2 flex items-center gap-2"><input readonly value="{{ link }}" id="lnk" class="{{ input() }} text-xs font-mono"><button onclick="navigator.clipboard.writeText(document.getElementById('lnk').value);this.textContent='Copied'" class="{{ btn('border border-slate-300 bg-white hover:bg-slate-50') }}">{{ icon('copy', 'h-3.5 w-3.5') }}Copy</button></div>
+    <div class="mt-2 flex flex-wrap gap-2 text-sm">
+     <a href="{{ wa }}" target="_blank" class="{{ btn('bg-[#1faa59] text-white hover:opacity-90') }}">{{ icon('message', 'h-3.5 w-3.5') }}WhatsApp</a>
+     <a href="{{ mail }}" class="{{ btn('border border-slate-300 bg-white hover:bg-slate-50') }}">{{ icon('mail', 'h-3.5 w-3.5') }}Email</a>
+     <a href="{{ link }}" target="_blank" class="{{ btn('text-brand-700 hover:bg-brand-50') }}">Open as supplier{{ icon('external', 'h-3.5 w-3.5') }}</a>
+    </div>
+   </div>
+  </section>
+
+  {% elif n.status == 'agreed' %}
+  <section class="rounded-lg border-2 border-emerald-500 bg-white p-5">
+   <p class="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{{ icon('check-circle', 'h-3.5 w-3.5') }}Deal agreed</p>
+   <p class="mt-1 text-4xl font-semibold tracking-tight num">{{ inr(r.agreed_price_paise) }}</p>
+   <dl class="mt-3 divide-y divide-slate-100 text-sm">
+    <div class="flex justify-between py-1.5"><dt class="text-slate-500">Original quote</dt><dd class="num">{{ inr(q.total_paise) }}</dd></div>
+    {% if q.total_paise > r.agreed_price_paise %}<div class="flex justify-between py-1.5"><dt class="text-slate-500">Negotiated reduction</dt><dd class="num font-medium text-emerald-700">{{ inr(q.total_paise - r.agreed_price_paise) }} · {{ ((q.total_paise - r.agreed_price_paise) * 1000 // q.total_paise) / 10 }}%</dd></div>{% endif %}
+    <div class="flex justify-between py-1.5"><dt class="text-slate-500">Delivery</dt><dd>{{ (final_offer.delivery_commitment if final_offer and final_offer.delivery_commitment else (r.needed_by and 'By ' ~ r.needed_by) or '—') }}</dd></div>
+    <div class="flex justify-between py-1.5"><dt class="text-slate-500">Payment terms</dt><dd>{{ (final_offer.terms if final_offer and final_offer.terms else q.payment_terms) or '—' }}</dd></div>
+    {% if accepted %}<div class="flex justify-between py-1.5"><dt class="text-slate-500">Agreed</dt><dd>{{ accepted.created_at.strftime('%d %b %Y, %H:%M') }} UTC · accepted by {{ 'you' if accepted.author == 'buyer' else accepted.author_name }}</dd></div>{% endif %}
+   </dl>
+   <p class="mt-3 text-[12px] text-slate-500">Terms are locked. A commercial record, not a legal e-signature. <a href="/requests/{{ r.id }}" class="font-medium text-brand-700 hover:underline">Record delivery performance after the job</a></p>
+  </section>
+
+  {% elif n.status in ('rejected', 'closed') %}
+  <section class="rounded-lg border border-slate-200 bg-white p-5"><p class="text-sm text-slate-600">This negotiation has ended{% if r.status == 'agreed' %}: the request was agreed with another supplier{% endif %}.</p></section>
   {% endif %}
 
+  {# ---------- buyer offer form (opening offer, or counter again) ---------- #}
   {% if prefill %}
-  <section class="bg-white rounded-lg border border-slate-200 p-5">
-   <h2 class="font-semibold">{{ 'Counteroffer' if n.status == 'awaiting_buyer' else 'Your offer' }}</h2>
-   <form method="post" action="/negotiations/{{ n.id }}/offer" class="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
-    <label class="block font-medium">All-inclusive price (₹)<input name="price_inr" type="number" step="1" min="1" required value="{{ prefill.price }}" class="mt-1 {{ input() }} text-lg font-semibold"></label>
+  <details id="counter" class="rounded-lg border border-slate-200 bg-white" {{ 'open' if n.status == 'draft' else '' }}>
+   <summary class="flex cursor-pointer items-center justify-between px-5 py-3 font-semibold">{{ 'Counter again' if n.status == 'awaiting_buyer' else 'Make your opening offer' }}{{ icon('chevron-down', 'h-4 w-4 text-slate-400') }}</summary>
+   <form method="post" action="/negotiations/{{ n.id }}/offer" class="grid sm:grid-cols-2 gap-4 border-t border-slate-100 px-5 py-4 text-sm">
+    <label class="block font-medium">All-inclusive price (₹)<input name="price_inr" type="number" step="1" min="1" required value="{{ prefill.price }}" class="mt-1 {{ input() }} text-lg font-semibold num"></label>
     <label class="block font-medium">Delivery commitment<input name="delivery" value="{{ prefill.delivery }}" class="mt-1 {{ input() }}"></label>
     <label class="sm:col-span-2 block font-medium">Payment terms<input name="terms" value="{{ prefill.terms }}" class="mt-1 {{ input() }}"></label>
-    <label class="sm:col-span-2 block font-medium">Message to supplier<textarea name="message" rows="4" class="mt-1 {{ input() }}">{{ prefill.message }}</textarea></label>
-    <button class="sm:col-span-2 justify-self-start {{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Send offer to {{ sup.name }}</button>
-   </form>
-   <p class="mt-3 text-xs text-slate-400">Suggested terms are proposals; you decide what is sent.</p>
-  </section>
-  {% endif %}
-
-  {% if extras and n.status in ('draft', 'awaiting_supplier') %}
-  <details class="bg-white rounded-lg border border-slate-200 p-5" {{ 'open' if n.status == 'awaiting_supplier' else '' }}>
-   <summary class="cursor-pointer font-semibold">Supplier replied on WhatsApp or by phone? Log it here</summary>
-   <p class="mt-1 text-xs text-slate-500">Or paste their message into Claude: <em>"{{ sup.name }} replied: …, log it in QuoteLoop."</em></p>
-   <form method="post" action="/negotiations/{{ n.id }}/log-reply" class="mt-4 grid sm:grid-cols-3 gap-3 text-sm">
-    <label class="block font-medium">Their price, all-inclusive (₹)<input name="price_inr" type="number" step="1" min="1" required class="mt-1 {{ input() }}"></label>
-    <label class="block font-medium">Delivery<input name="delivery" class="mt-1 {{ input() }}"></label>
-    <label class="block font-medium">Received via<select name="via" class="mt-1 {{ input() }}"><option>WhatsApp</option><option>phone</option><option>email</option></select></label>
-    <label class="sm:col-span-3 block font-medium">Their message<textarea name="message" rows="2" class="mt-1 {{ input() }}"></textarea></label>
-    <button class="sm:col-span-3 justify-self-start {{ btn('bg-brand-900 text-white hover:bg-brand-800') }}">Log supplier reply</button>
+    <label class="sm:col-span-2 block font-medium">Message to {{ sup.name }}<textarea name="message" rows="3" class="mt-1 {{ input() }}">{{ prefill.message }}</textarea></label>
+    <div class="sm:col-span-2 flex flex-wrap items-center justify-between gap-2">
+     <p class="text-[12px] text-slate-500">Original quote {{ inr(q.total_paise) }}{% if lv.target_paise %} · suggested opening {{ inr(lv.target_paise) }}{% endif %}</p>
+     <button class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">{{ icon('send', 'h-3.5 w-3.5') }}Send offer to {{ sup.name }}</button>
+    </div>
    </form>
   </details>
   {% endif %}
 
-  {% if n.status in ('awaiting_supplier', 'awaiting_buyer', 'agreed') %}
-  <section class="bg-white rounded-lg border border-slate-200 p-5">
-   <h2 class="font-semibold">Supplier's private link</h2>
-   <p class="text-xs text-slate-500">Optional: {{ sup.name }} can accept or counter in one tap and gets a written record of the agreed price and terms. They see only their own quote, with no account and no Claude. If they reply on WhatsApp instead, log it above.</p>
-   <div class="mt-3 flex items-center gap-2"><input readonly value="{{ link }}" id="lnk" class="{{ input() }} text-xs font-mono"><button onclick="navigator.clipboard.writeText(document.getElementById('lnk').value);this.textContent='Copied'" class="{{ btn('border border-slate-300 hover:bg-slate-50') }}">Copy</button></div>
-   <div class="mt-3 flex flex-wrap gap-2 text-sm">
-    <a href="{{ wa }}" target="_blank" class="{{ btn('bg-[#1faa59] text-white hover:opacity-90') }}">{{ icon('message', 'h-3.5 w-3.5') }}Share on WhatsApp</a>
-    <a href="{{ mail }}" class="{{ btn('border border-slate-300 bg-white hover:bg-slate-50') }}">{{ icon('mail', 'h-3.5 w-3.5') }}Email</a>
-    <a href="{{ link }}" target="_blank" class="{{ btn('text-brand-700 hover:bg-brand-50') }}">Open as supplier{{ icon('external', 'h-3.5 w-3.5') }}</a>
+  {% if extras and draft and n.status in ('draft', 'awaiting_buyer') %}
+  <section class="rounded-lg border border-brand-100 bg-brand-50 p-4 text-sm"><p class="flex items-center gap-1.5 text-[12px] font-semibold text-brand-800">{{ icon('sparkle', 'h-3.5 w-3.5') }}Draft from your Claude: {{ inr(draft.price_paise) }}</p>{% if draft.reasoning %}<p class="mt-1 text-slate-700 whitespace-pre-line">{{ draft.reasoning }}</p>{% endif %}</section>
+  {% endif %}
+
+  {# ---------- timeline ---------- #}
+  <section class="rounded-lg border border-slate-200 bg-white">
+   <div class="flex items-center justify-between border-b border-slate-100 px-5 py-3"><h2 class="font-semibold">Negotiation timeline</h2><span class="text-[12px] text-slate-500">{{ offers|length }} event{{ '' if offers|length == 1 else 's' }}</span></div>
+   <div class="px-5 py-4">
+    <ol class="relative border-l border-slate-200 ml-2 space-y-5">
+     <li class="ml-5"><span class="absolute -left-[7px] mt-1.5 h-3 w-3 rounded-full bg-slate-300 ring-4 ring-white"></span>
+      <p class="text-sm"><strong>{{ sup.name }}</strong> quoted <span class="font-semibold num">{{ inr(q.total_paise) }}</span></p>
+      <p class="text-[11px] text-slate-400">{{ q.created_at.strftime('%d %b %Y') }} · original quotation{% if q.created_via == 'claude' %} · read by your Claude{% endif %}</p></li>
+    </ol>
+    <div class="ml-2 mt-5">{% set buyer_label = "You" %}{% set supplier_label = sup.name %}{% include "timeline.html" %}</div>
    </div>
   </section>
-  {% endif %}
-  {% if n.status == 'agreed' %}<section class="rounded-lg bg-emerald-50 border border-emerald-200 p-5 text-sm flex items-center gap-2">{{ icon('check-circle', 'h-4 w-4 text-emerald-600') }}<span>Agreed. See the final terms on the <a href="/requests/{{ r.id }}" class="font-semibold underline">request page</a>.</span></section>{% endif %}
  </div>
+
+ {# ---------- side: evidence and context ---------- #}
+ <aside class="lg:col-span-2 space-y-5">
+  {% if lv.levers %}
+  <section class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+   <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h2 class="flex items-center gap-2 font-semibold">{{ icon('lightbulb', 'h-4 w-4 text-amber-500') }}Your negotiation advantage</h2><span class="text-[10px] uppercase tracking-wide text-slate-400">fixed rules · no AI</span></div>
+   {% if lv.target_paise and n.status in ('draft', 'awaiting_buyer') %}<div class="border-b border-slate-100 bg-slate-50 px-4 py-2.5"><p class="text-[11px] text-slate-500">Suggested opening offer</p><p class="text-lg font-semibold num">{{ inr(lv.target_paise) }}</p><p class="text-[11px] text-slate-500">{{ lv.target_basis|join(', ') }}</p></div>{% endif %}
+   <ul class="divide-y divide-slate-100">
+   {% for l in lv.levers[:3] %}
+    <li class="grid grid-cols-[1.75rem_1fr] gap-x-3 px-4 py-3">
+     <span class="grid h-7 w-7 place-items-center rounded-md {{ 'bg-rose-50 text-rose-600' if l.strength == 'strong' else ('bg-amber-50 text-amber-600' if l.strength == 'medium' else 'bg-slate-100 text-slate-500') }}">{{ icon(LICON.get(l.type, 'info'), 'h-3.5 w-3.5') }}</span>
+     <div class="min-w-0"><p class="text-[13px] font-medium text-slate-900">{{ l.title }}</p><p class="text-[12px] text-slate-500">{{ l.evidence }}</p><p class="mt-1 text-[12px] text-slate-700">{{ l.ask }}</p></div>
+    </li>
+   {% endfor %}
+   </ul>
+   {% if lv.levers|length > 3 %}
+   <details class="border-t border-slate-100"><summary class="cursor-pointer px-4 py-2.5 text-[12px] font-medium text-brand-700">{{ lv.levers|length - 3 }} more lever{{ '' if lv.levers|length == 4 else 's' }}</summary>
+    <ul class="divide-y divide-slate-100">{% for l in lv.levers[3:] %}<li class="px-4 py-2.5"><p class="text-[13px] font-medium">{{ l.title }}</p><p class="text-[12px] text-slate-500">{{ l.evidence }}</p></li>{% endfor %}</ul>
+   </details>{% endif %}
+  </section>
+  {% endif %}
+
+  <section class="rounded-lg border border-slate-200 bg-white">
+   <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3"><h2 class="font-semibold">History with {{ sup.name }}</h2><a href="/suppliers/{{ sup.id }}" class="text-[12px] font-medium text-brand-700">Profile</a></div>
+   {% if hist.engagements %}
+   <div class="grid grid-cols-3 gap-2 px-4 py-3 text-center">
+    <div><p class="text-lg font-semibold">{{ hist.engagements }}</p><p class="text-[11px] text-slate-500">past jobs</p></div>
+    <div><p class="text-lg font-semibold {{ 'text-rose-600' if hist.on_time_rate is not none and hist.on_time_rate < 70 else '' }}">{{ (hist.on_time_rate|int ~ '%') if hist.on_time_rate is not none else '—' }}</p><p class="text-[11px] text-slate-500">on time</p></div>
+    <div><p class="text-lg font-semibold">{{ hist.avg_discount_pct or 0 }}%</p><p class="text-[11px] text-slate-500">avg below quote</p></div>
+   </div>
+   {% else %}<p class="px-4 py-3 text-[13px] text-slate-500">No history yet; this deal starts it.</p>{% endif %}
+  </section>
+
+  <details class="rounded-lg border border-slate-200 bg-white">
+   <summary class="flex cursor-pointer items-center justify-between px-4 py-3"><span><span class="font-semibold">Full supplier comparison</span><span class="block text-[12px] text-slate-500">All quotes on this request (your view only)</span></span>{{ icon('chevron-down', 'h-4 w-4 text-slate-400') }}</summary>
+   <div class="overflow-x-auto border-t border-slate-100">
+    <table class="w-full text-[13px]">
+     <thead class="bg-slate-50 text-[10px] uppercase text-slate-500"><tr><th class="px-3 py-2 text-left">Supplier</th><th class="px-3 py-2 text-right">Total</th><th class="px-3 py-2 text-left">Terms</th></tr></thead>
+     <tbody class="divide-y divide-slate-100">{% for x in rows %}<tr class="{{ 'bg-brand-50' if x.supplier.id == sup.id else '' }}"><td class="px-3 py-2">{{ x.supplier.name }}{% if not x.comparable %} <span class="text-[10px] text-amber-700">not comparable</span>{% endif %}</td><td class="px-3 py-2 text-right num">{{ inr(x.total) }}</td><td class="px-3 py-2 text-[12px] text-slate-500">{{ (x.q.lead_time_days ~ 'd') if x.q.lead_time_days is not none else '—' }} · {{ x.q.payment_terms or '—' }}</td></tr>{% endfor %}</tbody>
+    </table>
+   </div>
+   <a href="/requests/{{ r.id }}" class="block border-t border-slate-100 px-4 py-2.5 text-[12px] font-medium text-brand-700">Open full comparison</a>
+  </details>
+ </aside>
 </div>
 {% endblock %}

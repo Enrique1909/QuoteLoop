@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, stars %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block body %}
+<h1 class="text-xl font-semibold tracking-tight">Suppliers</h1>
+<p class="text-[13px] text-slate-500">Built from your own quotes, agreements and delivery records.</p>
+<section class="mt-5 rounded-lg border border-slate-200 bg-white overflow-x-auto">
+ <table class="w-full min-w-[640px] text-sm">
+  <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Jobs</th><th class="px-4 py-2 text-right">Agreed spend</th><th class="px-4 py-2 text-right">Negotiated</th><th class="px-4 py-2 text-left">On time</th><th class="px-4 py-2 text-left">Rating</th><th class="px-4 py-2 text-left">Last job</th></tr></thead>
+  <tbody class="divide-y divide-slate-100">
+  {% for x in scorecard %}
+  <tr>
+   <td class="px-4 py-3"><a href="/suppliers/{{ x.supplier.id }}" class="font-medium hover:underline">{{ x.supplier.name }}</a> <span class="ml-1 rounded border px-1.5 py-px text-[10px] {{ cat_cls(x.supplier.category) }}">{{ x.supplier.category }}</span></td>
+   <td class="px-4 py-3 text-right num">{{ x.jobs }}</td>
+   <td class="px-4 py-3 text-right num">{{ inr(x.spend) }}</td>
+   <td class="px-4 py-3 text-right num {{ 'text-emerald-700' if x.saved > 0 else 'text-slate-400' }}">{{ inr(x.saved) }}</td>
+   <td class="px-4 py-3 text-[13px] {{ 'text-rose-600 font-medium' if x.on_time_rate is not none and x.on_time_rate < 70 else '' }}">{{ (x.on_time_rate|int ~ '%') if x.on_time_rate is not none else '—' }}{% if x.late %} · {{ x.late }} late{% endif %}</td>
+   <td class="px-4 py-3">{{ stars(x.avg_rating) }}</td>
+   <td class="px-4 py-3 text-[12px] text-slate-500">{{ x.last }}</td>
+  </tr>
+  {% else %}<tr><td colspan="7" class="px-4 py-6 text-slate-500">Supplier records build up as you close deals.</td></tr>{% endfor %}
+  </tbody>
+ </table>
+</section>
+{% endblock %}

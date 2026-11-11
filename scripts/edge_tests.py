@@ -63,7 +63,7 @@ async def main():
         r = await c.post("/login", data={"email": EMAIL, "password": "wrong"})
         check("Wrong password shows an error, no login", "Wrong email or password" in r.text)
         r = await c.post("/login", data={"email": EMAIL, "password": PW})
-        check("Buyer can log in", "Sourcing dashboard" in r.text)
+        check("Buyer can log in", "Needs your action" in r.text)
         for p in ["/dashboard", "/requests", "/requests?status=agreed", "/settings", f"/requests/{rid}"]:
             r = await c.get(p); check(f"Page {p} loads", r.status_code == 200)
         page = (await c.get(f"/requests/{rid}")).text
@@ -81,7 +81,7 @@ async def main():
         check("Offer with ₹ and commas is accepted", "Waiting on supplier" in r.text)
         token = re.search(r"/s/([A-Za-z0-9_-]{20,})", r.text).group(1)
     async with httpx.AsyncClient(base_url=BASE, timeout=60, follow_redirects=True) as sup:
-        r = await sup.get(f"/s/{token}"); check("Supplier link opens without login", r.status_code == 200 and "Their offer to you" in r.text)
+        r = await sup.get(f"/s/{token}"); check("Supplier link opens without login", r.status_code == 200 and "offers" in r.text and "Accept" in r.text)
         others = [n for n in ("Edge Co", "Edge Two") if n in r.text]
         check("Supplier page shows no competitor names", len(others) <= 1, others)
         r = await sup.post(f"/s/{token}/respond", data={"action": "counter", "name": "QA", "price_inr": ""})
@@ -96,8 +96,8 @@ async def main():
         r = await c.post(f"/negotiations/{nid}/accept"); check("Buyer accepts the counter", "Agreed" in r.text)
         r = await c.post(f"/negotiations/{nid}/accept"); check("Double accept doesn't crash", r.status_code == 200)
         r = await c.post(f"/requests/{rid}/suppliers/{sid}/remove"); check("Agreed supplier can't be removed", r.status_code == 200 and "Agreed" in r.text)
-        r = await c.post(f"/requests/{rid}/delete"); check("Delete request works", "Sourcing dashboard" in r.text)
-        r = await c.get(f"/requests/{rid}"); check("Deleted request is gone (redirects to dashboard)", "Sourcing dashboard" in r.text or "Not found" in r.text)
+        r = await c.post(f"/requests/{rid}/delete"); check("Delete request works", "Needs your action" in r.text)
+        r = await c.get(f"/requests/{rid}"); check("Deleted request is gone (redirects to dashboard)", "Needs your action" in r.text or "Not found" in r.text)
     passed = sum(ok for _, ok in results)
     print(f"\n{passed}/{len(results)} checks passed")
 

@@ -200,7 +200,7 @@ def _finalize(s: Session, n: Negotiation, price_paise: int):
 
 
 def supplier_respond(s: Session, n: Negotiation, *, action: str, name: str, price_paise: int = 0,
-                     delivery: str = "", message: str = "") -> None:
+                     delivery: str = "", message: str = "", terms: str = "") -> None:
     if n.token_revoked or n.status != "awaiting_supplier":
         raise InvalidState("There is no offer waiting for your response.")
     buyer_offer = latest_offer(s, n.id, "buyer")
@@ -216,7 +216,8 @@ def supplier_respond(s: Session, n: Negotiation, *, action: str, name: str, pric
         if price_paise <= 0:
             raise InvalidState("Enter your counteroffer price.")
         s.add(Offer(negotiation_id=n.id, author="supplier", price_paise=price_paise,
-                    delivery_commitment=delivery.strip()[:200], message=message.strip()[:2000], author_name=name))
+                    delivery_commitment=delivery.strip()[:200], terms=(terms or "").strip()[:200],
+                    message=message.strip()[:2000], author_name=name))
         _touch(s, n, "awaiting_buyer")
     else:
         raise InvalidState("Unknown action.")
