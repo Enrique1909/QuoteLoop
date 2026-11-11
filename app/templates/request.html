@@ -6,7 +6,7 @@
 <div class="mt-2 flex flex-wrap items-start justify-between gap-4">
  <div>
   <div class="flex items-center gap-2 flex-wrap"><h1 class="text-xl font-semibold tracking-tight text-slate-900">{{ r.title }}</h1>{{ badge(r.status) }}
-   {% if r.created_via == 'claude' %}<span class="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">{{ icon('sparkle', 'h-3 w-3') }}created via Claude</span>{% endif %}{% if r.is_sample %}{{ pill('sample data') }}{% endif %}</div>
+   {% if r.created_via == 'claude' %}<span class="inline-flex items-center gap-1 rounded-md border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">{{ icon('sparkle', 'h-3 w-3') }}created via Claude</span>{% endif %}{% if r.is_sample %}{{ pill('sample data') }}{% endif %}</div>
   <p class="mt-1 text-sm text-slate-600 max-w-3xl">{{ r.specifications }}</p>
   <p class="mt-1 text-xs text-slate-500">Requested: <strong>{{ r.quantity }} {{ r.unit }}</strong>{% if r.category %} · {{ r.category }}{% endif %}{% if r.needed_by %} · needed by {{ r.needed_by }}{% endif %}</p>
  </div>
@@ -36,7 +36,7 @@
    <label class="block">{{ l }}<select name="{{ f }}" class="mt-1 {{ input() }}"><option value="yes">Yes</option><option value="no">No</option></select></label>{% endfor %}
    <label class="block">Rating (1–5)<input name="rating" type="number" min="1" max="5" value="4" class="mt-1 {{ input() }}"></label>
    <label class="block">Notes<input name="notes" class="mt-1 {{ input() }}"></label>
-   <button class="sm:col-span-5 justify-self-start {{ btn('bg-slate-900 text-white hover:bg-slate-700') }}">Save to supplier history</button>
+   <button class="sm:col-span-5 justify-self-start {{ btn('bg-brand-900 text-white hover:bg-brand-800') }}">Save to supplier history</button>
   </form></details>
   {% else %}<p class="mt-3 text-sm">Outcome recorded: {{ 'on time' if e.on_time else 'late' }} · rating {{ e.rating or '—' }}/5{% if e.notes %} · “{{ e.notes }}”{% endif %}</p>{% endif %}
  {% endif %}
@@ -44,9 +44,9 @@
 {% endif %}
 
 {% if extras and rec %}{% set rc = rec.rec %}
-<section class="mt-6 rounded-lg border border-violet-200 bg-white overflow-hidden">
- <div class="flex flex-wrap items-center justify-between gap-2 border-b border-violet-100 bg-violet-50/60 px-5 py-2.5">
-  <span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-violet-800">{{ icon('sparkle', 'h-3.5 w-3.5') }}Award recommendation from your Claude</span>
+<section class="mt-6 rounded-lg border border-brand-100 bg-white overflow-hidden">
+ <div class="flex flex-wrap items-center justify-between gap-2 border-b border-brand-100 bg-brand-50 px-5 py-2.5">
+  <span class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-brand-800">{{ icon('sparkle', 'h-3.5 w-3.5') }}Award recommendation from your Claude</span>
   <span class="text-[11px] text-slate-500">{{ rc.created_at.strftime('%d %b, %H:%M') }} UTC · a suggestion; nothing is awarded automatically</span>
  </div>
  <div class="grid lg:grid-cols-3 gap-6 px-5 py-4">
@@ -72,7 +72,7 @@
  </div>
 </section>
 {% elif extras and r.status != 'agreed' and rows|length > 1 %}
-<div class="mt-6 flex items-start gap-2 rounded-lg border border-dashed border-violet-200 bg-white px-4 py-3 text-[13px] text-slate-600">{{ icon('sparkle', 'h-4 w-4 text-violet-600 mt-0.5') }}<span>Not sure who to pick? Ask your Claude: <em>"Which supplier should we award for {{ r.title }}, and why? Save your recommendation in QuoteLoop."</em></span></div>
+<div class="mt-6 flex items-start gap-2 rounded-lg border border-dashed border-brand-100 bg-white px-4 py-3 text-[13px] text-slate-600">{{ icon('sparkle', 'h-4 w-4 text-brand-600 mt-0.5') }}<span>Not sure who to pick? Ask your Claude: <em>"Which supplier should we award for {{ r.title }}, and why? Save your recommendation in QuoteLoop."</em></span></div>
 {% endif %}
 
 <section class="mt-6 bg-white rounded-lg border border-slate-200 overflow-hidden">
@@ -116,7 +116,7 @@
    </td>
    <td class="px-4 py-4 text-right whitespace-nowrap">
     {% if r.status != 'agreed' %}<a href="/quotes/{{ q.id }}/edit" class="{{ btn('text-slate-600 hover:bg-slate-100') }}">Edit</a>{% endif %}
-    {% if x.negotiation %}<a href="/negotiations/{{ x.negotiation.id }}" class="{{ btn('bg-slate-900 text-white hover:bg-slate-700') }}">{{ status(x.negotiation.status)[0] }}</a>
+    {% if x.negotiation %}<a href="/negotiations/{{ x.negotiation.id }}" class="{{ btn('bg-brand-900 text-white hover:bg-brand-800') }}">{{ status(x.negotiation.status)[0] }}</a>
     {% elif r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/negotiate/{{ x.supplier.id }}" class="inline"><button class="{{ btn('bg-brand-600 text-white hover:bg-brand-700') }}">Negotiate</button></form>{% endif %}
     {% if r.status != 'agreed' %}<form method="post" action="/requests/{{ r.id }}/suppliers/{{ x.supplier.id }}/remove" class="mt-1" onsubmit="return confirm('Remove {{ x.supplier.name }} from this request? Their quote, negotiation and private link will be removed.')"><button class="text-xs text-slate-400 hover:text-rose-600">Remove supplier</button></form>{% endif %}
    </td>

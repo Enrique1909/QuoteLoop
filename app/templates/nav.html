@@ -1,12 +1,12 @@
 {% from "macros.html" import icon %}
-<header class="bg-slate-900 text-slate-300">
+<header class="bg-brand-900 text-slate-300">
  <div class="max-w-6xl mx-auto px-4 sm:px-6 h-12 flex items-center justify-between">
-  <a href="/dashboard" class="flex items-center gap-2 font-semibold text-white tracking-tight"><span class="grid place-items-center h-6 w-6 rounded bg-brand-600 text-[10px] font-bold text-white">QL</span>QuoteLoop</a>
+  <a href="/dashboard" class="flex items-center gap-2 font-semibold text-white tracking-tight"><span class="grid place-items-center h-6 w-6 rounded bg-brand-600 text-[10px] font-bold text-white ring-1 ring-brand-100/40">QL</span>QuoteLoop</a>
   <nav class="flex items-center gap-0.5 text-[13px]">
-   <a href="/dashboard" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-slate-800 hover:text-white">{{ icon('grid', 'h-3.5 w-3.5') }}Dashboard</a>
-   <a href="/requests" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-slate-800 hover:text-white">{{ icon('list', 'h-3.5 w-3.5') }}Requests</a>
-   <a href="/settings" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-slate-800 hover:text-white">{{ icon('plug', 'h-3.5 w-3.5') }}Connect Claude</a>
-   <form method="post" action="/logout"><button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-slate-400 hover:bg-slate-800 hover:text-white">{{ icon('logout', 'h-3.5 w-3.5') }}<span class="hidden sm:inline">Log out</span></button></form>
+   <a href="/dashboard" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-white/10 hover:text-white">{{ icon('grid', 'h-3.5 w-3.5') }}Dashboard</a>
+   <a href="/requests" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-white/10 hover:text-white">{{ icon('list', 'h-3.5 w-3.5') }}Requests</a>
+   <a href="/settings" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded hover:bg-white/10 hover:text-white">{{ icon('plug', 'h-3.5 w-3.5') }}Connect Claude</a>
+   <form method="post" action="/logout"><button class="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-slate-400 hover:bg-white/10 hover:text-white">{{ icon('logout', 'h-3.5 w-3.5') }}<span class="hidden sm:inline">Log out</span></button></form>
   </nav>
  </div>
 </header>

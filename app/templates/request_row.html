@@ -5,7 +5,7 @@
   <div class="flex items-center gap-2 flex-wrap">
    <p class="font-medium text-slate-900 truncate">{{ x.r.title }}</p>
    {% if x.r.category %}<span class="rounded-md border px-1.5 py-0.5 text-[11px] font-medium {{ cat_cls(x.r.category) }}">{{ x.r.category }}</span>{% endif %}
-   {% if x.r.created_via == 'claude' %}<span class="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">{{ icon('sparkle', 'h-3 w-3') }}via Claude</span>{% endif %}
+   {% if x.r.created_via == 'claude' %}<span class="inline-flex items-center gap-1 rounded-md border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">{{ icon('sparkle', 'h-3 w-3') }}via Claude</span>{% endif %}
   </div>
   <p class="text-xs text-slate-500 mt-0.5">{{ x.quotes }} quote{{ '' if x.quotes == 1 else 's' }}{% if x.r.needed_by %} · needed by {{ x.r.needed_by }}{% endif %}{% if x.r.is_sample %} · sample{% endif %}</p>
  </div>

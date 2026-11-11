@@ -5,7 +5,7 @@
 <nav class="flex items-center gap-1 text-[13px] text-slate-500"><a href="/dashboard" class="hover:text-slate-800">Dashboard</a><span class="text-slate-300">/</span><span class="text-slate-700">Supplier review</span></nav>
 <div class="mt-2 flex flex-wrap items-center gap-2">
  <h1 class="text-xl font-semibold tracking-tight">{{ rv.title }}</h1>
- <span class="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">{{ icon('sparkle', 'h-3 w-3') }}written by your Claude</span>
+ <span class="inline-flex items-center gap-1 rounded-md border border-brand-100 bg-brand-50 px-1.5 py-0.5 text-[11px] font-medium text-brand-700">{{ icon('sparkle', 'h-3 w-3') }}written by your Claude</span>
 </div>
 <p class="text-[12px] text-slate-500">{{ rv.created_at.strftime('%d %b %Y, %H:%M') }} UTC · from QuoteLoop's records; figures calculated by the app</p>
 <div class="mt-5 grid lg:grid-cols-3 gap-6">
@@ -15,7 +15,7 @@
    <p class="px-5 py-2.5 border-b border-slate-100 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Recommended actions</p>
    <ol class="divide-y divide-slate-100">
    {% for a in rv.recommendations %}
-    <li class="grid grid-cols-[1.75rem_1fr] gap-x-3 px-5 py-3"><span class="grid h-7 w-7 place-items-center rounded-md bg-slate-900 text-xs font-semibold text-white">{{ loop.index }}</span>
+    <li class="grid grid-cols-[1.75rem_1fr] gap-x-3 px-5 py-3"><span class="grid h-7 w-7 place-items-center rounded-md bg-brand-900 text-xs font-semibold text-white">{{ loop.index }}</span>
      <div><p class="text-sm font-medium text-slate-900">{{ a.action }}</p>
      {% if a.supplier or a.impact %}<p class="mt-0.5 text-[13px] text-slate-500">{% if a.supplier %}<span class="font-medium text-slate-700">{{ a.supplier }}</span>{% endif %}{% if a.supplier and a.impact %} · {% endif %}{{ a.impact }}</p>{% endif %}</div></li>
    {% endfor %}

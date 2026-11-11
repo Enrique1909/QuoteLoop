@@ -6,7 +6,7 @@
 <h1 class="mt-2 text-xl font-semibold tracking-tight">{{ 'Agreements' if status == 'agreed' else 'All sourcing requests' }}</h1>
 <div class="mt-3 flex gap-2 text-sm">
  {% for key, label in [('', 'All'), ('negotiating', 'Negotiating'), ('comparing', 'Comparing'), ('agreed', 'Agreed')] %}
- <a href="/requests{{ ('?status=' ~ key) if key else '' }}" class="rounded-full px-3 py-1 {{ 'bg-slate-900 text-white' if status == key else 'bg-white border border-slate-200 hover:bg-slate-50' }}">{{ label }}</a>{% endfor %}
+ <a href="/requests{{ ('?status=' ~ key) if key else '' }}" class="rounded-full px-3 py-1 {{ 'bg-brand-900 text-white' if status == key else 'bg-white border border-slate-200 hover:bg-slate-50' }}">{{ label }}</a>{% endfor %}
 </div>
 <section class="mt-5 bg-white rounded-lg border border-slate-200 overflow-hidden divide-y divide-slate-100">
  {% for x in rows %}{% include "request_row.html" %}{% else %}<p class="px-5 py-8 text-sm text-slate-500">Nothing here.</p>{% endfor %}

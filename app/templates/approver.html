@@ -23,7 +23,7 @@
  <table class="w-full text-sm">
   <thead class="bg-slate-50 text-[11px] uppercase text-slate-500"><tr><th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Total</th><th class="px-4 py-2 text-left">On time</th><th class="px-4 py-2 text-left">Rating</th></tr></thead>
   <tbody class="divide-y divide-slate-100">
-  {% for x in rows %}<tr class="{{ 'bg-violet-50/50' if x.supplier.id == rec.supplier_id else '' }}"><td class="px-4 py-2.5 font-medium">{{ x.supplier.name }}</td><td class="px-4 py-2.5 text-right num">{{ inr(x.total) }}</td>
+  {% for x in rows %}<tr class="{{ 'bg-brand-50' if x.supplier.id == rec.supplier_id else '' }}"><td class="px-4 py-2.5 font-medium">{{ x.supplier.name }}</td><td class="px-4 py-2.5 text-right num">{{ inr(x.total) }}</td>
    <td class="px-4 py-2.5 text-[13px] {{ 'text-rose-600 font-medium' if x.history.on_time_rate is not none and x.history.on_time_rate < 70 else '' }}">{{ (x.history.on_time_rate|int ~ '%') if x.history.on_time_rate is not none else '—' }}</td>
    <td class="px-4 py-2.5">{{ stars(x.history.avg_rating) }}</td></tr>{% endfor %}
   </tbody>
