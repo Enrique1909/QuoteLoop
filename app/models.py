@@ -132,3 +132,34 @@ class Engagement(SQLModel, table=True):
     rating: Optional[int] = None  # 1-5
     notes: str = ""
     is_sample: bool = False
+
+
+class AwardRecommendation(SQLModel, table=True):
+    """Claude's judgement on which supplier to award, saved for the buyer and an approver."""
+    __tablename__ = "ql_recommendation"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    request_id: int = Field(foreign_key="ql_request.id", index=True)
+    supplier_id: int = Field(foreign_key="ql_supplier.id")
+    headline: str
+    rationale: str = ""
+    risks: list = Field(default_factory=list, sa_column=Column(JSON))
+    fallback_supplier_id: Optional[int] = None
+    fallback_note: str = ""
+    target_price_paise: Optional[int] = None
+    share_token: str = Field(default_factory=lambda: secrets.token_urlsafe(18), index=True, unique=True)
+    approval_status: str = "pending"  # pending | approved | changes_requested
+    approver_name: str = ""
+    approver_comment: str = ""
+    responded_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=now)
+
+
+class SupplierReview(SQLModel, table=True):
+    """A supplier/spend review written by the buyer's Claude from QuoteLoop data."""
+    __tablename__ = "ql_review"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    workspace_id: int = Field(foreign_key="ql_workspace.id", index=True)
+    title: str
+    summary: str = ""
+    recommendations: list = Field(default_factory=list, sa_column=Column(JSON))  # [{action, supplier, impact}]
+    created_at: datetime = Field(default_factory=now)

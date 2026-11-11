@@ -5,7 +5,7 @@ from sqlalchemy import text
 from app.db import engine, init_db
 from app.seed import ensure_workspace, seed_sample_data
 
-TABLES = ["ql_draft", "ql_offer", "ql_negotiation", "ql_engagement", "ql_quotation", "ql_request", "ql_supplier"]
+TABLES = ["ql_recommendation", "ql_review", "ql_draft", "ql_offer", "ql_negotiation", "ql_engagement", "ql_quotation", "ql_request", "ql_supplier"]
 
 init_db()
 with engine.begin() as c:

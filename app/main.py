@@ -15,7 +15,8 @@ from app import services
 from app.auth import LoginRequired, check_password, current_workspace_id, require_login
 from app.db import get_session, init_db
 from app.mcp_server import WorkspaceKeyRouter, mcp
-from app.models import (Engagement, Negotiation, Offer, Quotation, SourcingRequest, Supplier, Workspace)
+from app.models import (AwardRecommendation, Engagement, Negotiation, Offer, Quotation, SourcingRequest, Supplier,
+                        SupplierReview, Workspace)
 from app.money import format_inr, inr_to_paise, pct
 from app.seed import DEMO_EMAIL, seed
 
@@ -147,8 +148,11 @@ def dashboard(request: Request):
              "your_turn": sum(1 for x in rows if x["state"] == "action"),
              "spend": sum(x["spend"] for x in scorecard), "saved": sum(x["saved"] for x in scorecard),
              "jobs": sum(x["jobs"] for x in scorecard)}
+    with get_session() as s:
+        review = s.exec(select(SupplierReview).where(SupplierReview.workspace_id == wid)
+                        .order_by(SupplierReview.id.desc())).first()
     return render(request, "dashboard.html", ws=ws, active=active, agreed=agreed, stats=stats, activity=activity,
-                  scorecard=scorecard, agreed_total=sum(x["r"].agreed_price_paise or 0 for x in agreed))
+                  scorecard=scorecard, agreed_total=sum(x["r"].agreed_price_paise or 0 for x in agreed), review=review)
 
 
 def _request_rows(s, wid):
@@ -217,7 +221,14 @@ def request_page(request: Request, rid: int):
                       "saved": first.total_paise - r.agreed_price_paise if first else 0,
                       "saved_pct": pct(first.total_paise - r.agreed_price_paise, first.total_paise) if first else None,
                       "engagement": eng}
-        return render(request, "request.html", r=r, rows=rows, agreed=agreed)
+        rec = services.latest_recommendation(s, r.id)
+        rec_ctx = None
+        if rec:
+            msg = f"Please review the supplier recommendation for {r.title}: {base_url(request)}/a/{rec.share_token}"
+            rec_ctx = {"rec": rec, "supplier": s.get(Supplier, rec.supplier_id),
+                       "fallback": s.get(Supplier, rec.fallback_supplier_id) if rec.fallback_supplier_id else None,
+                       "link": f"{base_url(request)}/a/{rec.share_token}", "wa": f"https://wa.me/?text={urlquote(msg)}"}
+        return render(request, "request.html", r=r, rows=rows, agreed=agreed, rec=rec_ctx)
 
 
 @app.post("/requests/{rid}/quotes")
@@ -408,6 +419,52 @@ def supplier_page(request: Request, sid: int):
     with get_session() as s:
         sup = services.get_supplier(s, wid, sid)
         return render(request, "supplier.html", sup=sup, hist=services.history_summary(s, wid, sid))
+
+
+@app.get("/reviews/{rvid}", response_class=HTMLResponse)
+def review_page(request: Request, rvid: int):
+    wid = require_login(request)
+    with get_session() as s:
+        rv = s.get(SupplierReview, rvid)
+        if not rv or rv.workspace_id != wid:
+            return RedirectResponse("/dashboard", status_code=303)
+        others = list(s.exec(select(SupplierReview).where(SupplierReview.workspace_id == wid, SupplierReview.id != rvid)
+                             .order_by(SupplierReview.id.desc()).limit(5)))
+        return render(request, "review.html", rv=rv, others=others, scorecard=services.supplier_scorecard(s, wid))
+
+
+# ---------- approver (private link, no account) ----------
+@app.get("/a/{token}", response_class=HTMLResponse)
+def approver_page(request: Request, token: str, done: str = ""):
+    with get_session() as s:
+        rec = s.exec(select(AwardRecommendation).where(AwardRecommendation.share_token == token)).first()
+        if not rec:
+            return render(request, "supplier_missing.html")
+        r = s.get(SourcingRequest, rec.request_id)
+        ws = s.get(Workspace, r.workspace_id)
+        rows = services.comparison(s, r)
+        return render(request, "approver.html", rec=rec, r=r, ws=ws, rows=rows, done=done,
+                      supplier=s.get(Supplier, rec.supplier_id),
+                      fallback=s.get(Supplier, rec.fallback_supplier_id) if rec.fallback_supplier_id else None)
+
+
+@app.post("/a/{token}/respond")
+def approver_respond(request: Request, token: str, decision: str = Form(...), name: str = Form(...),
+                     comment: str = Form("")):
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "?").split(",")[0]
+    if rate_limited(f"a:{token}:{ip}"):
+        return RedirectResponse(f"/a/{token}", status_code=303)
+    with get_session() as s:
+        rec = s.exec(select(AwardRecommendation).where(AwardRecommendation.share_token == token)).first()
+        if rec and rec.approval_status == "pending":
+            rec.approval_status = "approved" if decision == "approve" else "changes_requested"
+            rec.approver_name = name.strip()[:80]
+            rec.approver_comment = comment.strip()[:1000]
+            from app.models import now as _now
+            rec.responded_at = _now()
+            s.add(rec)
+            s.commit()
+    return RedirectResponse(f"/a/{token}?done={decision}", status_code=303)
 
 
 @app.get("/settings", response_class=HTMLResponse)

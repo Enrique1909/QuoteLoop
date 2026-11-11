@@ -451,6 +451,9 @@ def delete_request(s: Session, req: SourcingRequest) -> None:
         s.delete(q)
     for e in s.exec(select(Engagement).where(Engagement.request_id == req.id)):
         s.delete(e)
+    from app.models import AwardRecommendation
+    for rec in s.exec(select(AwardRecommendation).where(AwardRecommendation.request_id == req.id)):
+        s.delete(rec)
     s.flush()
     s.delete(req)
     s.commit()
@@ -485,3 +488,53 @@ def log_supplier_reply(s: Session, n: Negotiation, *, price_paise: int, delivery
     req.status = "negotiating"
     _touch(s, n, "awaiting_buyer", req)
     return o
+
+
+# ---------- Claude's judgement: award recommendations and supplier reviews ----------
+def latest_recommendation(s: Session, rid: int):
+    from app.models import AwardRecommendation
+    return s.exec(select(AwardRecommendation).where(AwardRecommendation.request_id == rid)
+                  .order_by(AwardRecommendation.id.desc())).first()
+
+
+def sourcing_overview(s: Session, req: SourcingRequest) -> dict:
+    """Everything needed to judge the award: every quote with its totals, flags, history and levers."""
+    out = request_dict(s, req)
+    for qd in out["quotations"]:
+        sup = s.get(Supplier, qd["supplier_id"])
+        h = history_summary(s, req.workspace_id, sup.id)
+        lv = negotiation_levers(s, req, sup)
+        qd["history"] = {"engagements": h["engagements"],
+                         "on_time_rate_pct": float(h["on_time_rate"]) if h["on_time_rate"] is not None else None,
+                         "late_deliveries": h["late_count"], "avg_rating": h["avg_rating"],
+                         "avg_discount_from_quote_pct": h["avg_discount_pct"], "issues": h["issues"][:3]}
+        qd["levers"] = [l["title"] for l in lv["levers"]]
+        qd["suggested_opening_offer"] = format_inr(lv["target_paise"]) if lv["target_paise"] else None
+    return out
+
+
+def spend_overview(s: Session, wid: int) -> dict:
+    card = supplier_scorecard(s, wid)
+    by_cat = {}
+    for x in card:
+        c = x["supplier"].category or "Other"
+        d = by_cat.setdefault(c, {"spend_paise": 0, "saved_paise": 0, "jobs": 0, "suppliers": []})
+        d["spend_paise"] += x["spend"]
+        d["saved_paise"] += x["saved"]
+        d["jobs"] += x["jobs"]
+        d["suppliers"].append(x["supplier"].name)
+    open_reqs = list(s.exec(select(SourcingRequest).where(SourcingRequest.workspace_id == wid,
+                                                          SourcingRequest.status.in_(["comparing", "negotiating"]))))
+    return {
+        "totals": {"spend": format_inr(sum(x["spend"] for x in card)), "saved": format_inr(sum(x["saved"] for x in card)),
+                   "jobs": sum(x["jobs"] for x in card)},
+        "by_category": [{"category": c, "spend": format_inr(d["spend_paise"]), "saved": format_inr(d["saved_paise"]),
+                         "jobs": d["jobs"], "suppliers": d["suppliers"]} for c, d in sorted(by_cat.items(), key=lambda kv: -kv[1]["spend_paise"])],
+        "suppliers": [{"supplier_id": x["supplier"].id, "supplier": x["supplier"].name, "category": x["supplier"].category,
+                       "jobs": x["jobs"], "spend": format_inr(x["spend"]), "saved": format_inr(x["saved"]),
+                       "saved_pct": float(x["saved_pct"]) if x["saved_pct"] is not None else None,
+                       "on_time_rate_pct": float(x["on_time_rate"]) if x["on_time_rate"] is not None else None,
+                       "late": x["late"], "issues": x["issues"], "avg_rating": x["avg_rating"], "last_job": x["last"]}
+                      for x in card],
+        "open_requests": [{"request_id": r.id, "title": r.title, "status": r.status, "category": r.category} for r in open_reqs],
+    }

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, stars, btn, input %}
+{% block title %}Approve supplier · {{ r.title }}{% endblock %}
+{% block mainclass %}max-w-2xl mx-auto px-4 py-8{% endblock %}
+{% block body %}
+<p class="text-[12px] text-slate-500">Approval request from <strong>{{ ws.name }}</strong></p>
+<h1 class="text-xl font-semibold tracking-tight">{{ r.title }}</h1>
+<p class="text-[13px] text-slate-500">{{ r.specifications }}{% if r.needed_by %} · needed by {{ r.needed_by }}{% endif %}</p>
+
+{% if done %}<div class="mt-4 flex items-center gap-2 rounded-lg border {{ 'border-emerald-200 bg-emerald-50' if done == 'approve' else 'border-amber-200 bg-amber-50' }} px-4 py-3 text-sm">{{ icon('check-circle', 'h-4 w-4') }}Thanks, your response was recorded.</div>{% endif %}
+
+<section class="mt-5 rounded-lg border border-slate-200 bg-white p-5">
+ <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Recommended supplier</p>
+ <p class="mt-1 text-lg font-semibold">{{ supplier.name }}{% if rec.target_price_paise %} <span class="font-normal text-slate-500">at about</span> <span class="num">{{ inr(rec.target_price_paise) }}</span>{% endif %}</p>
+ <p class="mt-1 text-sm font-medium text-slate-800">{{ rec.headline }}</p>
+ <p class="mt-2 text-sm leading-relaxed text-slate-600 whitespace-pre-line">{{ rec.rationale }}</p>
+ {% if rec.risks %}<ul class="mt-3 space-y-1">{% for risk in rec.risks %}<li class="flex items-start gap-1.5 text-[13px] text-amber-800">{{ icon('alert', 'h-3.5 w-3.5 mt-0.5') }}{{ risk }}</li>{% endfor %}</ul>{% endif %}
+ {% if fallback %}<p class="mt-3 text-[13px] text-slate-600"><span class="font-medium text-slate-800">Fallback:</span> {{ fallback.name }}{% if rec.fallback_note %}. {{ rec.fallback_note }}{% endif %}</p>{% endif %}
+</section>
+
+<section class="mt-4 rounded-lg border border-slate-200 bg-white overflow-hidden">
+ <p class="px-5 py-2.5 border-b border-slate-100 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Quotes received</p>
+ <table class="w-full text-sm">
+  <thead class="bg-slate-50 text-[11px] uppercase text-slate-500"><tr><th class="px-4 py-2 text-left">Supplier</th><th class="px-4 py-2 text-right">Total</th><th class="px-4 py-2 text-left">On time</th><th class="px-4 py-2 text-left">Rating</th></tr></thead>
+  <tbody class="divide-y divide-slate-100">
+  {% for x in rows %}<tr class="{{ 'bg-violet-50/50' if x.supplier.id == rec.supplier_id else '' }}"><td class="px-4 py-2.5 font-medium">{{ x.supplier.name }}</td><td class="px-4 py-2.5 text-right num">{{ inr(x.total) }}</td>
+   <td class="px-4 py-2.5 text-[13px] {{ 'text-rose-600 font-medium' if x.history.on_time_rate is not none and x.history.on_time_rate < 70 else '' }}">{{ (x.history.on_time_rate|int ~ '%') if x.history.on_time_rate is not none else '—' }}</td>
+   <td class="px-4 py-2.5">{{ stars(x.history.avg_rating) }}</td></tr>{% endfor %}
+  </tbody>
+ </table>
+</section>
+
+{% if rec.approval_status == 'pending' %}
+<form method="post" action="/a/{{ rec.share_token }}/respond" class="mt-4 rounded-lg border border-slate-200 bg-white p-5 space-y-3 text-sm">
+ <label class="block font-medium">Your name<input name="name" required class="mt-1 {{ input() }}"></label>
+ <label class="block font-medium">Comment (optional)<textarea name="comment" rows="2" class="mt-1 {{ input() }}"></textarea></label>
+ <div class="flex flex-wrap gap-2">
+  <button name="decision" value="approve" class="{{ btn('bg-emerald-600 text-white hover:bg-emerald-700') }}">{{ icon('check') }}Approve</button>
+  <button name="decision" value="changes" class="{{ btn('border border-slate-300 bg-white hover:bg-slate-50') }}">Ask for changes</button>
+ </div>
+</form>
+{% else %}
+<p class="mt-4 text-sm text-slate-600">{{ 'Approved' if rec.approval_status == 'approved' else 'Changes requested' }} by {{ rec.approver_name }}{% if rec.approver_comment %}: “{{ rec.approver_comment }}”{% endif %}</p>
+{% endif %}
+{% endblock %}
+{% block footer %}The recommendation was written by {{ ws.name }}'s Claude from their own records; figures are calculated by QuoteLoop.{% endblock %}

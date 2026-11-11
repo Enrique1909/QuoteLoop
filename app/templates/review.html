@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "macros.html" import icon, stars, btn %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block body %}
+<nav class="flex items-center gap-1 text-[13px] text-slate-500"><a href="/dashboard" class="hover:text-slate-800">Dashboard</a><span class="text-slate-300">/</span><span class="text-slate-700">Supplier review</span></nav>
+<div class="mt-2 flex flex-wrap items-center gap-2">
+ <h1 class="text-xl font-semibold tracking-tight">{{ rv.title }}</h1>
+ <span class="inline-flex items-center gap-1 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-medium text-violet-700">{{ icon('sparkle', 'h-3 w-3') }}written by your Claude</span>
+</div>
+<p class="text-[12px] text-slate-500">{{ rv.created_at.strftime('%d %b %Y, %H:%M') }} UTC · from QuoteLoop's records; figures calculated by the app</p>
+<div class="mt-5 grid lg:grid-cols-3 gap-6">
+ <section class="lg:col-span-2 space-y-5">
+  <div class="rounded-lg border border-slate-200 bg-white p-5"><p class="text-sm leading-relaxed text-slate-700 whitespace-pre-line">{{ rv.summary }}</p></div>
+  <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+   <p class="px-5 py-2.5 border-b border-slate-100 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Recommended actions</p>
+   <ol class="divide-y divide-slate-100">
+   {% for a in rv.recommendations %}
+    <li class="grid grid-cols-[1.75rem_1fr] gap-x-3 px-5 py-3"><span class="grid h-7 w-7 place-items-center rounded-md bg-slate-900 text-xs font-semibold text-white">{{ loop.index }}</span>
+     <div><p class="text-sm font-medium text-slate-900">{{ a.action }}</p>
+     {% if a.supplier or a.impact %}<p class="mt-0.5 text-[13px] text-slate-500">{% if a.supplier %}<span class="font-medium text-slate-700">{{ a.supplier }}</span>{% endif %}{% if a.supplier and a.impact %} · {% endif %}{{ a.impact }}</p>{% endif %}</div></li>
+   {% endfor %}
+   </ol>
+  </div>
+ </section>
+ <aside class="space-y-5">
+  <div class="rounded-lg border border-slate-200 bg-white overflow-hidden">
+   <p class="px-4 py-2.5 border-b border-slate-100 text-[12px] font-semibold uppercase tracking-wide text-slate-500">Figures behind it</p>
+   <table class="w-full text-[13px]"><tbody class="divide-y divide-slate-100">
+    {% for x in scorecard %}<tr><td class="px-4 py-2"><a href="/suppliers/{{ x.supplier.id }}" class="hover:underline">{{ x.supplier.name }}</a></td><td class="px-4 py-2 text-right num">{{ inr(x.spend) }}</td><td class="px-4 py-2 text-right text-[12px] {{ 'text-rose-600 font-medium' if x.on_time_rate is not none and x.on_time_rate < 70 else 'text-slate-500' }}">{{ (x.on_time_rate|int ~ '%') if x.on_time_rate is not none else '—' }}</td></tr>{% endfor %}
+   </tbody></table>
+  </div>
+  {% if others %}<div class="rounded-lg border border-slate-200 bg-white p-4"><p class="text-[12px] font-semibold uppercase tracking-wide text-slate-500">Earlier reviews</p><ul class="mt-2 space-y-1 text-[13px]">{% for o in others %}<li><a href="/reviews/{{ o.id }}" class="hover:underline">{{ o.title }}</a> <span class="text-slate-400">{{ o.created_at.strftime('%d %b') }}</span></li>{% endfor %}</ul></div>{% endif %}
+ </aside>
+</div>
+{% endblock %}
